@@ -1,6 +1,5 @@
-# ServiceNow Scraper Pelindo
-
-Aplikasi ini adalah dashboard lokal untuk login ke ServiceNow Pelindo melalui Playwright, memilih filter secara dinamis, membaca semua halaman tabel, mengambil detail dan Activities satu per satu, menyimpan checkpoint JSON, dan membuat laporan PDF patch release.
+# ServiceNow Scraper 
+Aplikasi ini adalah dashboard lokal untuk login ke ServiceNow melalui Playwright, memilih filter secara dinamis, membaca semua halaman tabel, mengambil detail dan Activities satu per satu, menyimpan checkpoint JSON, dan membuat laporan PDF patch release.
 
 ## Status workspace
 
@@ -14,7 +13,7 @@ Workspace awal tidak berisi source prototype atau file PDF `Laporan Patch Releas
 4. Salin `.env.example` menjadi `.env`, lalu isi kredensial secara lokal:
 
 ```env
-SN_BASE_URL=https://pelindo.service-now.com
+SN_BASE_URL=https:/
 SN_USERNAME=
 SN_PASSWORD=
 HEADLESS=false
