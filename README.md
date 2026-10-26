@@ -1,9 +1,9 @@
-# ServiceNow Scraper 
+# Service Scraper 
 Aplikasi ini adalah dashboard lokal untuk login ke ServiceNow melalui Playwright, memilih filter secara dinamis, membaca semua halaman tabel, mengambil detail dan Activities satu per satu, menyimpan checkpoint JSON, dan membuat laporan PDF patch release.
 
 ## Status workspace
 
-Workspace awal tidak berisi source prototype atau file PDF `Laporan Patch Release September`. Implementasi ini mempertahankan selector dan alur navigasi yang disebutkan pada spesifikasi. Pencocokan visual PDF dan smoke test produksi memerlukan file referensi serta akses ServiceNow yang valid.
+Workspace awal tidak berisi source prototype. Implementasi ini mempertahankan selector dan alur navigasi yang disebutkan pada spesifikasi. Pencocokan visual PDF dan smoke test produksi memerlukan file referensi serta akses ServiceNow yang valid.
 
 ## Instalasi
 
@@ -48,8 +48,6 @@ Alur penggunaan:
 Checkpoint tersimpan sebagai `output/<filter>-checkpoint.json` setelah setiap tiket. JSON ekspor menggunakan penulisan atomik dan memiliki metadata, data tabel, detail, Activities, status, serta error per tiket.
 
 ## PDF
-
-Generator memakai A4 portrait, header `LAPORAN PATCH RELEASE`, periode, garis tabel formal, footer halaman, satu tiket per halaman, pembungkusan teks, dan 17 bidang laporan. Nilai `Result` default adalah `Other`; status ServiceNow `Closed` tidak otomatis dianggap `Success`. Data laporan dibaca dari JSON hasil. Tombol **Preview PDF** membuka PDF inline; checkbox screenshot menyimpan screenshot halaman detail dan input bukti dapat mengunggah gambar untuk tiket yang dicentang.
 
 API PDF menerima `ticketNumbers`, `period`, dan `overrides`. Upload bukti tersedia melalui `/api/upload-evidence`; gambar yang tersimpan diteruskan ke generator melalui opsi `screenshots`.
 
