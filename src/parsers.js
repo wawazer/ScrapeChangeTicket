@@ -16,7 +16,19 @@ const aliases = {
   status: ['status', 'state'],
   prioritas: ['prioritas', 'priority'],
   start_date: ['start date', 'tanggal mulai'],
-  end_date: ['end date', 'tanggal selesai']
+  end_date: ['end date', 'tanggal selesai'],
+  requestor: ['requestor', 'requested by', 'pemohon'],
+  nipp_nrk: ['nipp/nrk', 'nipp nrk', 'nipp', 'nrk'],
+  contact: ['contact', 'kontak', 'phone', 'telephone'],
+  email: ['email', 'e-mail'],
+  location: ['location', 'lokasi'],
+  application: ['application', 'aplication', 'aplikasi'],
+  change: ['change', 'change request', 'request perubahan'],
+  ip_address_server: ['ip address server', 'server ip', 'ip address'],
+  version: ['version', 'versi'],
+  directory: ['directory', 'direktori', 'path'],
+  cause: ['cause', 'penyebab'],
+  action_plan: ['action plan', 'rencana tindakan']
 };
 
 const normalizeLabel = (value) => cleanText(value).toLowerCase().replace(/[.:/()_-]+/g, ' ').replace(/\s+/g, ' ');
@@ -145,23 +157,24 @@ export function validateExportData(data) {
 export function reportTicket(ticket, overrides = {}) {
   const detail = ticket.detail_tiket || {};
   const table = ticket.data_tabel || {};
+  const value = (key, ...fallbacks) => overrides[key] ?? detail[key] ?? table[key] ?? fallbacks.map((fallback) => detail[fallback] ?? table[fallback]).find((item) => item !== undefined && item !== '') ?? '-';
   return {
-    date: overrides.date ?? detail.created ?? table.created ?? '-',
+    date: value('date', 'created'),
     ticket_number: ticket.nomor_tiket,
-    requestor: overrides.requestor ?? detail.requestor ?? '-',
-    nipp_nrk: overrides.nipp_nrk ?? detail.nipp_nrk ?? '-',
-    contact: overrides.contact ?? detail.contact ?? '-',
-    email: overrides.email ?? detail.email ?? '-',
-    location: overrides.location ?? detail.location ?? '-',
-    application: overrides.application ?? detail.application ?? detail.configuration_item ?? '-',
-    change: overrides.change ?? detail.change_request ?? '-',
-    ip_address_server: overrides.ip_address_server ?? detail.ip_address_server ?? '-',
-    version: overrides.version ?? detail.version ?? '-',
-    directory: overrides.directory ?? detail.directory ?? '-',
-    pic: overrides.pic ?? detail.pic ?? detail.ditugaskan_kepada ?? '-',
-    description: overrides.description ?? detail.deskripsi_permasalahan_text ?? htmlToText(detail.deskripsi_permasalahan_html) ?? '-',
-    result: overrides.result ?? 'Other',
-    cause: overrides.cause ?? detail.cause ?? '-',
-    action_plan: overrides.action_plan ?? detail.action_plan ?? '-'
+    requestor: value('requestor'),
+    nipp_nrk: value('nipp_nrk'),
+    contact: value('contact'),
+    email: value('email'),
+    location: value('location'),
+    application: value('application', 'configuration_item'),
+    change: value('change', 'change_request'),
+    ip_address_server: value('ip_address_server'),
+    version: value('version'),
+    directory: value('directory'),
+    pic: value('pic', 'ditugaskan_kepada'),
+    description: overrides.description ?? detail.deskripsi_permasalahan_text ?? (htmlToText(detail.deskripsi_permasalahan_html || '') || '-'),
+    result: overrides.result ?? detail.result ?? ticket.report?.result ?? 'Other',
+    cause: value('cause'),
+    action_plan: value('action_plan')
   };
 }

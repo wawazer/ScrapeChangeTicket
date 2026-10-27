@@ -1,0 +1,34 @@
+{
+  "metadata": {
+    "filter_name": "CTASK SEPTEMBER",
+    "total_found": 1
+  },
+  "tickets": [
+    {
+      "nomor_tiket": "CTASK0016523",
+      "data_tabel": {},
+      "detail_tiket": {
+        "created": "01 September 2026",
+        "change_request": "CHG0004840",
+        "tipe_task": "Change",
+        "requestor": "RUDI HERDIYANTORO",
+        "nipp_nrk": "103988",
+        "contact": "081217429300",
+        "email": "RUDI.HERDIYANTORO@PELINDO.CO.ID",
+        "location": "Kantor Pusat PT Pelabuhan Indonesia",
+        "application": "Promote",
+        "pic": "Delfan",
+        "deskripsi_permasalahan_text": "Fix Nota Dinas in Monitoring P2P.",
+        "ip_address_server": "-",
+        "version": "-",
+        "directory": "-",
+        "cause": "",
+        "action_plan": ""
+      },
+      "report": { "result": "Success" },
+      "activities": [],
+      "errors": [],
+      "scrape_status": "success"
+    }
+  ]
+}

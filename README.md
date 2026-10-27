@@ -23,6 +23,7 @@ SN_PAGE_SIZE=100
 SN_CHECKPOINT_EVERY=5
 SN_CONCURRENCY=1
 OUTPUT_DIR=output
+PELINDO_LOGO_PATH=assets/pelindo-logo.png
 ```
 
 Password tidak dicetak ke log dan `.env` diabaikan Git.
@@ -50,6 +51,8 @@ Checkpoint tersimpan sebagai `output/<filter>-checkpoint.json` setelah setiap ti
 ## PDF
 
 API PDF menerima `ticketNumbers`, `period`, dan `overrides`. Upload bukti tersedia melalui `/api/upload-evidence`; gambar yang tersimpan diteruskan ke generator melalui opsi `screenshots`.
+
+Laporan menggunakan layout Letter portrait yang diukur dari `assets/template-reference.png`. Logo lokal default berada di `assets/pelindo-logo.png`; generator menghentikan ekspor dengan error informatif apabila aset tersebut tidak ditemukan. Fixture dan pemeriksaan layout tersedia melalui `npm run test:visual`.
 
 ## Testing
 

@@ -15,5 +15,6 @@ export const config = {
   pageSize: asInt(process.env.SN_PAGE_SIZE, 100),
   checkpointEvery: asInt(process.env.SN_CHECKPOINT_EVERY, 5),
   concurrency: Math.max(1, asInt(process.env.SN_CONCURRENCY, 1)),
-  outputDir: path.resolve(process.env.OUTPUT_DIR || 'output')
+  outputDir: path.resolve(process.env.OUTPUT_DIR || 'output'),
+  logoPath: path.resolve(process.env.PELINDO_LOGO_PATH || 'assets/pelindo-logo.png')
 };
