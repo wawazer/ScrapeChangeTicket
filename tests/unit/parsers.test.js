@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deduplicateTickets, htmlToText, makeMetadata, mapColumns, parseActivities, parseDetailFields, parseStatus, parseTableRows, reportTicket, validateExportData } from '../../src/parsers.js';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { deduplicateTickets, htmlToText, isSysId, makeMetadata, mapColumns, parseActivities, parseDetailFields, parseStatus, parseTableRows, reportTicket, validateExportData, validateTicketData } from '../../src/parsers.js';
 
 test('maps columns by label and ignores reordered columns', () => {
   const mapping = mapColumns(['Selector', 'Tipe Task', 'Nomor Tiket', 'Judul Permasalahan', 'Status']);
@@ -44,4 +46,45 @@ test('creates metadata, validates output and prepares report fields', () => {
 
 test('cleans HTML and preserves meaningful links', () => {
   assert.equal(htmlToText('<p>Hello<br>world</p><script>x</script>'), 'Hello\nworld');
+});
+
+test('keeps table data limited to mapped headers', () => {
+  const [ticket] = parseTableRows({ headers: ['No. Tiket', 'Created', 'Ignored'], rows: [{ cells: [{ text: 'CTASK0001' }, { text: '01-09-2026' }, { text: 'text from an unmapped cell' }] }] });
+  assert.deepEqual(ticket.values, { nomor_tiket: 'CTASK0001', created: '01-09-2026' });
+  assert.equal(ticket.values.ignored, undefined);
+});
+
+test('uses the row ticket number when detail description contains HTML', () => {
+  const detail = parseDetailFields({ fields: { 'Nomor Tiket': '<p>description</p>', 'Change Request': 'b960642693634710cbd5f6fa2bba1075' }, descriptionHtml: '<p>description</p>' });
+  assert.equal(detail.nomor_tiket, '');
+  const validation = validateTicketData({ nomor_tiket: 'CTASK0001', detail_tiket: { ...detail, nomor_tiket: '<p>description</p>' } });
+  assert.equal(validation.valid, false);
+  assert.ok(validation.errors.includes('detail_tiket.nomor_tiket bukan nomor CTASK'));
+});
+
+test('prefers display values over sys_id values in report mapping', () => {
+  const report = reportTicket({ nomor_tiket: 'CTASK0001', data_tabel: { change_request: 'CHG0005654', ditugaskan_kepada: 'Mohamad Romli', configuration_item: 'PICO (ICOFR)' }, detail_tiket: { change_request: 'b960642693634710cbd5f6fa2bba1075', ditugaskan_kepada: '2713c04e0f9b52006872c5ece1050e05', configuration_item: '5e3012cd932b6a90cbd5f6fa2bba1087' } });
+  assert.equal(report.change, 'CHG0005654');
+  assert.equal(report.pic, 'Mohamad Romli');
+  assert.equal(report.application, '-');
+  assert.equal(isSysId('b960642693634710cbd5f6fa2bba1075'), true);
+});
+
+test('converts a ServiceNow state code using the selected option label', () => {
+  const detail = parseDetailFields({ fields: { status: { value: '3', text: '3' } }, statusOptions: { '3': 'Closed' } });
+  assert.deepEqual(detail.status, { kode: '3', nama: 'Closed' });
+});
+
+test('actual twenty-ticket fixture preserves ticket identity and display mappings', async () => {
+  const source = JSON.parse(await fs.readFile(path.join(import.meta.dirname, '../fixtures/actual-servicenow-result.json'), 'utf8'));
+  const expected = JSON.parse(await fs.readFile(path.join(import.meta.dirname, '../fixtures/actual-servicenow-expected.json'), 'utf8'));
+  assert.equal(source.tickets.length, 20);
+  assert.deepEqual(source.tickets.map((ticket) => ticket.nomor_tiket), expected.tickets.map((ticket) => ticket.nomor_tiket));
+  expected.tickets.forEach((item, index) => {
+    const sourceTicket = source.tickets[index];
+    assert.equal(sourceTicket.data_tabel.change_request, item.change_request);
+    assert.match(sourceTicket.data_tabel.ditugaskan_kepada, /[A-Za-z]/);
+    assert.equal(item.status.nama, 'Closed');
+  });
+  assert.match(source.tickets[0].detail_tiket.nomor_tiket, /<p|<a/i);
 });

@@ -46,6 +46,8 @@ Alur penggunaan:
 6. Pilih checkbox tiket bila ingin membuat PDF sebagian.
 7. Unduh JSON atau buat PDF.
 
+Workspace frontend menyediakan area Dashboard, Scraping tickets, Data tickets, Riwayat scraping, Export reports, dan Settings. Tabel data membaca nilai aktual dari run ServiceNow; klik nomor tiket untuk melihat detail, description yang disanitasi, activities, dan catatan validasi.
+
 Checkpoint tersimpan sebagai `output/<filter>-checkpoint.json` setelah setiap tiket. JSON ekspor menggunakan penulisan atomik dan memiliki metadata, data tabel, detail, Activities, status, serta error per tiket.
 
 ## PDF
@@ -65,6 +67,8 @@ npm run lint
 ```
 
 Tes unit memeriksa mapping, status, HTML, Activities, deduplikasi, metadata, validasi, dan data laporan. Tes integrasi memeriksa checkpoint JSON dan PDF. E2E memeriksa dashboard lokal dan tidak adanya kredensial dalam UI. Tidak ada tes yang melakukan scraping produksi.
+
+Fixture mapping aktual berada di `tests/fixtures/actual-servicenow-result.json` dengan expected mapping di `tests/fixtures/actual-servicenow-expected.json`. Pemeriksaan UI Hallmark menggunakan `node C:/Users/admin/.agents/skills/hallmark/scripts/sloplint.mjs public --scope app --genre modern-minimal --kept`.
 
 Smoke test live opsional:
 

@@ -1,4 +1,4 @@
-import { cleanText, slug, ticketNumber, uniqueBy } from './utils.js';
+import { cleanText, ticketNumber, uniqueBy } from './utils.js';
 
 const aliases = {
   nomor_tiket: ['no tiket', 'nomor tiket', 'ticket number', 'number', 'no ticket', 'task number'],
@@ -57,7 +57,10 @@ export function parseTableRows({ headers = [], rows = [] } = {}) {
   const mapping = mapColumns(effectiveHeaders);
   return rows.map((row) => {
     const data = {};
-    effectiveHeaders.forEach((header, index) => { data[slug(header) || `column_${index + 1}`] = cleanText(rowValue(row, index)); });
+    Object.entries(mapping).forEach(([field, index]) => {
+      const value = cleanText(rowValue(row, index));
+      if (value) data[field] = value;
+    });
     const link = row.cells?.find((cell) => cell.href)?.href || row.href || '';
     const metadataCell = row.cells?.find((cell) => matches(cell.field || '', aliases.nomor_tiket));
     const numberFromMapped = rowValue(row, mapping.nomor_tiket) || metadataCell?.text;
@@ -107,16 +110,38 @@ export function parseDetailFields({ fields = {}, statusOptions = {}, description
   for (const field of Object.keys(aliases)) raw[field] = cleanText(valueFromFields(fields, field));
   const statusRaw = valueFromFields(fields, 'status');
   const status = parseStatus(statusRaw);
-  if (!status.kode && status.nama) {
-    const option = Object.entries(statusOptions).find(([, name]) => normalizeLabel(name) === normalizeLabel(status.nama));
-    if (option) status.kode = option[0];
-  }
+  const statusOption = status.kode
+    ? Object.entries(statusOptions).find(([code]) => normalizeLabel(code) === normalizeLabel(status.kode))
+    : Object.entries(statusOptions).find(([, name]) => normalizeLabel(name) === normalizeLabel(status.nama));
+  if (statusOption) { status.kode = statusOption[0]; status.nama = statusOption[1]; }
   const html = descriptionHtml || fields.description_html || valueFromFields(fields, 'deskripsi_permasalahan_html') || '';
-  raw.nomor_tiket = ticketNumber(raw.nomor_tiket) || raw.nomor_tiket;
+  raw.nomor_tiket = ticketNumber(raw.nomor_tiket);
   raw.status = status;
   raw.deskripsi_permasalahan_html = html;
   raw.deskripsi_permasalahan_text = htmlToText(html || raw.deskripsi_permasalahan);
   return raw;
+}
+
+const sysIdPattern = /^[a-f0-9]{24,40}$/i;
+const hasUsefulValue = (value) => value !== undefined && value !== null && cleanText(value) !== '';
+
+export function isSysId(value) {
+  return sysIdPattern.test(cleanText(value));
+}
+
+export function validateTicketData(ticket = {}) {
+  const errors = [];
+  const warnings = [];
+  const number = ticketNumber(ticket.nomor_tiket);
+  const detail = ticket.detail_tiket || {};
+  if (!number) errors.push('nomor_tiket wajib berformat CTASK');
+  if (detail.nomor_tiket && !ticketNumber(detail.nomor_tiket)) errors.push('detail_tiket.nomor_tiket bukan nomor CTASK');
+  for (const field of ['change_request', 'ditugaskan_kepada', 'pic', 'kelompok_yang_ditugaskan', 'configuration_item']) {
+    if (isSysId(detail[field])) warnings.push(`${field} berisi sys_id, nilai tampilan tidak tersedia`);
+  }
+  if (detail.status && (!detail.status.kode || !detail.status.nama)) warnings.push('status.kode dan status.nama belum lengkap');
+  if (detail.deskripsi_permasalahan_html && detail.nomor_tiket === detail.deskripsi_permasalahan_html) errors.push('HTML deskripsi masuk ke nomor tiket');
+  return { valid: errors.length === 0, errors, warnings };
 }
 
 export function parseActivities(items = []) {
@@ -148,7 +173,7 @@ export function makeMetadata({ filterName, totalFound, tickets, scrapedAt = new 
 export function validateExportData(data) {
   if (!data || typeof data !== 'object' || !data.metadata || !Array.isArray(data.tickets)) throw new Error('Struktur hasil tidak valid');
   for (const ticket of data.tickets) {
-    if (!ticket.nomor_tiket) throw new Error('Tiket tanpa nomor_tiket tidak dapat diekspor');
+    if (!ticketNumber(ticket.nomor_tiket)) throw new Error(`Tiket tanpa nomor CTASK valid tidak dapat diekspor: ${ticket.nomor_tiket || 'kosong'}`);
     if (!Array.isArray(ticket.errors)) throw new Error(`errors tidak valid untuk ${ticket.nomor_tiket}`);
   }
   return true;
@@ -157,7 +182,11 @@ export function validateExportData(data) {
 export function reportTicket(ticket, overrides = {}) {
   const detail = ticket.detail_tiket || {};
   const table = ticket.data_tabel || {};
-  const value = (key, ...fallbacks) => overrides[key] ?? detail[key] ?? table[key] ?? fallbacks.map((fallback) => detail[fallback] ?? table[fallback]).find((item) => item !== undefined && item !== '') ?? '-';
+  const value = (key, ...fallbacks) => {
+    const candidates = [overrides[key], detail[key], table[key], ...fallbacks.flatMap((fallback) => [detail[fallback], table[fallback]])];
+    return candidates.find((item) => hasUsefulValue(item) && !isSysId(item)) ?? '-';
+  };
+  const change = value('change', 'change_request');
   return {
     date: value('date', 'created'),
     ticket_number: ticket.nomor_tiket,
@@ -166,8 +195,8 @@ export function reportTicket(ticket, overrides = {}) {
     contact: value('contact'),
     email: value('email'),
     location: value('location'),
-    application: value('application', 'configuration_item'),
-    change: value('change', 'change_request'),
+    application: value('application'),
+    change: change === '-' ? '-' : change,
     ip_address_server: value('ip_address_server'),
     version: value('version'),
     directory: value('directory'),

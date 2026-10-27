@@ -1,0 +1,30 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "brand",
+  "genre": "modern-minimal",
+  "axes": "light/pelindo-blue/restrained",
+  "hero": "dashboard summary with live run context",
+  "nav": "persistent side rail",
+  "footer": "kept operational shell",
+  "imagery": "local Pelindo logo only",
+  "photos": [],
+  "entry": "ScrapeChangeTicket operational workspace",
+  "fingerprint": "side-rail/workflow/table/detail/report",
+  "sections": [
+   "Dashboard",
+   "Scraping tickets",
+   "Data tickets",
+   "Riwayat scraping",
+   "Export reports",
+   "Settings"
+  ],
+  "signature": "validated ticket table",
+  "waived": [],
+  "prompt": "redesign ScrapeChangeTicket as a Pelindo ServiceNow operations workspace",
+  "date": "2026-10-27"
+ }
+]

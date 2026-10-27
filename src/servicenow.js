@@ -198,6 +198,20 @@ export class ServiceNowClient {
     const frame = await this.frame();
     const snapshot = await frame.locator('body').evaluate(() => {
       const fields = {};
+      const first = (selectors) => selectors.map((selector) => document.querySelector(selector)).find((node) => node);
+      const valueOf = (selectors) => {
+        const node = first(selectors);
+        if (!node) return '';
+        if (node.tagName === 'SELECT') return node.selectedOptions[0]?.textContent?.trim() || node.value || '';
+        return (node.value ?? node.innerText ?? node.textContent ?? '').trim();
+      };
+      const displayValue = (field) => valueOf([
+        `input[name="sys_display.change_task.${field}"]`,
+        `input[id="sys_display.change_task.${field}"]`,
+        `input[name="${field}"][data-displayvalue]`,
+        `input[name="${field}"]`
+      ]);
+      const setCanonical = (field, value) => { if (value) fields[field] = value; };
       for (const element of document.querySelectorAll('input, textarea, select, [contenteditable="true"]')) {
         const group = element.closest('.form-group, .form-field, .sn-form-row, .field, td') || element.parentElement;
         const label = group?.querySelector('label, .label, th')?.innerText || element.getAttribute('aria-label') || element.getAttribute('name') || element.id || '';
@@ -206,15 +220,37 @@ export class ServiceNowClient {
         fields[label.trim()] = value;
         if (/description|deskripsi/i.test(label)) fields.description_html = element.innerHTML || value;
       }
-      const status = [...document.querySelectorAll('select')].find((node) => /state|status/i.test(node.name || node.id || node.closest('div')?.innerText || ''));
+      setCanonical('change_request', displayValue('change_request'));
+      setCanonical('ditugaskan_kepada', displayValue('assigned_to'));
+      setCanonical('pic', displayValue('assigned_to') || displayValue('u_pic') || displayValue('pic'));
+      setCanonical('kelompok_yang_ditugaskan', displayValue('assignment_group'));
+      setCanonical('configuration_item', displayValue('cmdb_ci'));
+      setCanonical('created', valueOf(['input[name="change_task.opened_at"]', 'input[name="change_task.sys_created_on"]', 'input[name="opened_at"]']));
+      setCanonical('requestor', displayValue('requested_by') || displayValue('requestor'));
+      setCanonical('nipp_nrk', valueOf(['input[name="change_task.u_nipp_nrk"]', 'input[name="u_nipp_nrk"]', 'input[name="nipp_nrk"]']));
+      setCanonical('contact', valueOf(['input[name="change_task.u_contact"]', 'input[name="u_contact"]', 'input[name="contact"]']));
+      setCanonical('email', valueOf(['input[name="change_task.u_email"]', 'input[name="u_email"]', 'input[name="email"]']));
+      setCanonical('location', displayValue('location') || valueOf(['input[name="change_task.location"]', 'input[name="location"]']));
+      setCanonical('application', displayValue('application') || valueOf(['input[name="change_task.u_application"]', 'input[name="u_application"]']));
+      setCanonical('ip_address_server', valueOf(['input[name="change_task.u_ip_address_server"]', 'input[name="u_ip_address_server"]', 'input[name="ip_address_server"]']));
+      setCanonical('version', valueOf(['input[name="change_task.u_version"]', 'input[name="u_version"]', 'input[name="version"]']));
+      setCanonical('directory', valueOf(['input[name="change_task.u_directory"]', 'input[name="u_directory"]', 'input[name="directory"]']));
+      setCanonical('cause', valueOf(['textarea[name="change_task.u_cause"]', 'textarea[name="u_cause"]', 'textarea[name="cause"]']));
+      setCanonical('action_plan', valueOf(['textarea[name="change_task.u_action_plan"]', 'textarea[name="u_action_plan"]', 'textarea[name="action_plan"]']));
+      const description = first(['textarea[name="change_task.description"]', 'textarea[name="description"]', '[contenteditable="true"][name*="description"]', '[contenteditable="true"][id*="description"]']);
+      const descriptionHtml = description?.innerHTML || description?.value || fields.description_html || '';
+      const status = document.querySelector('select[name="change_task.state"]') || [...document.querySelectorAll('select')].find((node) => /state|status/i.test(node.name || node.id || node.closest('div')?.innerText || ''));
       const statusOptions = status ? Object.fromEntries([...status.options].map((option) => [option.value, option.textContent.trim()])) : {};
       const activities = [...document.querySelectorAll('.activity, .sn-stream-entry, [data-activity], .timeline-item, .activity-stream')].map((node) => ({ text: node.innerText, timestamp: node.querySelector('time, .timestamp, .date')?.innerText, user: node.querySelector('.user, .author, .created-by')?.innerText, type: node.dataset.activityType || node.querySelector('.type')?.innerText, content: node.querySelector('.content, .body, .comment, .work-notes')?.innerText || node.innerText }));
-      const numberText = document.querySelector('input[name*="number"], input[id*="number"], .form-group:has(label)')?.value || document.body.innerText;
-      return { fields, statusOptions, descriptionHtml: fields.description_html || '', activities, numberText };
+      const numberText = valueOf(['input[name="change_task.number"]', 'input[name="number"]', 'input[id="change_task.number"]']);
+      const stateValue = status?.value || '';
+      fields.status = { value: stateValue, text: status?.selectedOptions[0]?.textContent?.trim() || '' };
+      return { fields, statusOptions, descriptionHtml, activities, numberText };
     });
     const detail = parseDetailFields(snapshot);
-    const actualNumber = ticketNumber(detail.nomor_tiket) || ticketNumber(snapshot.numberText);
+    const actualNumber = ticketNumber(snapshot.numberText);
     if (actualNumber && actualNumber !== row.nomor_tiket) throw new Error(`Validasi nomor tiket gagal: diharapkan ${row.nomor_tiket}, ditemukan ${actualNumber}`);
+    detail.nomor_tiket = row.nomor_tiket;
     const activityItems = parseActivities(await this.readActivities(frame));
     info('Detail tiket selesai', { ticket: row.nomor_tiket, activities: activityItems.length });
     return { detail, activities: activityItems, activities_status: 'success', activities_error: null };

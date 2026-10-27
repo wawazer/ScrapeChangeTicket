@@ -1,5 +1,9 @@
-import 'dotenv/config';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import dotenv from 'dotenv';
+
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+dotenv.config({ path: path.join(projectRoot, '.env') });
 
 const asBool = (value, fallback) => value === undefined ? fallback : value === 'true';
 const asInt = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;

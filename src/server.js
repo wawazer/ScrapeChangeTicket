@@ -7,6 +7,7 @@ import { error, info, warn } from './logger.js';
 import { ServiceNowClient } from './servicenow.js';
 import { createRun, checkpointPath, saveRun, upsertTicket } from './store.js';
 import { generatePdf } from './pdf.js';
+import { validateTicketData } from './parsers.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -62,7 +63,10 @@ async function runScrape({ limit = 0, includeScreenshot = false } = {}) {
         screenshot = screenshotPath;
         if (screenshot) state.evidence[row.nomor_tiket] = screenshot;
       }
-      upsertTicket(state.run, { ...item, detail_tiket: result.detail, activities: result.activities, activities_status: result.activities_status, activities_error: result.activities_error, scrape_status: 'success', errors: [] });
+      const validation = validateTicketData({ ...item, detail_tiket: result.detail });
+      const validationErrors = [...validation.errors, ...validation.warnings.map((warning) => `Warning: ${warning}`)];
+      upsertTicket(state.run, { ...item, detail_tiket: result.detail, activities: result.activities, activities_status: result.activities_status, activities_error: result.activities_error, scrape_status: 'success', errors: validationErrors, validation_status: validation.valid ? (validation.warnings.length ? 'warning' : 'valid') : 'invalid' });
+      if (validationErrors.length) addLog(`${row.nomor_tiket} memiliki catatan validasi: ${validationErrors.join('; ')}`, 'warn');
       addLog(`${row.nomor_tiket} berhasil`);
     } catch (err) {
       upsertTicket(state.run, { ...item, scrape_status: 'failed', activities_status: 'error', activities_error: err.message, errors: [err.message] });

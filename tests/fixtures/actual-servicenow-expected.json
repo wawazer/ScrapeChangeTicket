@@ -1,0 +1,228 @@
+{
+  "metadata": {
+    "filter_name": "CTASK SEPTEMBER",
+    "total_found": 20
+  },
+  "tickets": [
+    {
+      "nomor_tiket": "CTASK0016976",
+      "created": "30-09-2026 10:08:34",
+      "change_request": "CHG0005654",
+      "assigned_to": "Mohamad Romli",
+      "configuration_item": "PICO (ICOFR)",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016975",
+      "created": "30-09-2026 10:03:57",
+      "change_request": "CHG0005569",
+      "assigned_to": "Mohamad Romli",
+      "configuration_item": "Pelindo Insurance Claim System",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016974",
+      "created": "30-09-2026 10:00:17",
+      "change_request": "CHG0005660",
+      "assigned_to": "Mohamad Romli",
+      "configuration_item": "Peluit.",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016973",
+      "created": "29-09-2026 14:27:16",
+      "change_request": "CHG0005661",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "P-Eproc",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016972",
+      "created": "29-09-2026 11:16:14",
+      "change_request": "CHG0004562",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "Promote",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016971",
+      "created": "29-09-2026 11:15:32",
+      "change_request": "CHG0004562",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "Promote",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016970",
+      "created": "29-09-2026 11:12:41",
+      "change_request": "CHG0004562",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "Promote",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016969",
+      "created": "29-09-2026 11:11:39",
+      "change_request": "CHG0004562",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "Promote",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016968",
+      "created": "29-09-2026 11:01:50",
+      "change_request": "CHG0004840",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "Promote",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016967",
+      "created": "29-09-2026 10:56:28",
+      "change_request": "CHG0004840",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "Promote",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016966",
+      "created": "29-09-2026 10:46:26",
+      "change_request": "CHG0005545",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "P-Invent",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016965",
+      "created": "29-09-2026 10:43:34",
+      "change_request": "CHG0005658",
+      "assigned_to": "Mohamad Romli",
+      "configuration_item": "PortalAPBS",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016964",
+      "created": "29-09-2026 10:42:47",
+      "change_request": "CHG0005545",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "P-Invent",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016963",
+      "created": "29-09-2026 10:41:35",
+      "change_request": "CHG0005658",
+      "assigned_to": "Mohamad Romli",
+      "configuration_item": "PortalAPBS",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016962",
+      "created": "29-09-2026 10:31:27",
+      "change_request": "CHG0005653",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "TAD Operating System (TANOS)",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016959",
+      "created": "29-09-2026 10:11:37",
+      "change_request": "CHG0005657",
+      "assigned_to": "Mohamad Romli",
+      "configuration_item": "PortalAPBS",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016954",
+      "created": "28-09-2026 17:06:12",
+      "change_request": "CHG0005654",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "PICO (ICOFR)",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016953",
+      "created": "28-09-2026 15:45:32",
+      "change_request": "CHG0005648",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "Data Pool.",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016952",
+      "created": "28-09-2026 14:26:12",
+      "change_request": "CHG0005647",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "TAD Operating System (TANOS)",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    },
+    {
+      "nomor_tiket": "CTASK0016951",
+      "created": "28-09-2026 14:06:42",
+      "change_request": "CHG0005640",
+      "assigned_to": "Ahmad Mansyur Fadli",
+      "configuration_item": "P-Invent",
+      "status": {
+        "kode": "3",
+        "nama": "Closed"
+      }
+    }
+  ]
+}
