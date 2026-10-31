@@ -5,3 +5,7 @@ diagnostics/
 playwright-report/
 test-results/
 *.log
+AGENTS.md
+.gitignore
+.tmp/
+reference/

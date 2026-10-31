@@ -30,7 +30,13 @@ export class ServiceNowClient {
   async frame() {
     if (!this.page) throw new Error('Browser belum dibuka');
     await this.page.waitForLoadState('domcontentloaded').catch(() => {});
-    return this.page.frames().find((frame) => frame.name() === SELECTORS.frame) || this.page.mainFrame();
+    const frames = this.page.frames().filter((frame) => frame.name() === SELECTORS.frame);
+    if (!frames.length) return this.page.mainFrame();
+    for (const candidate of frames.slice().reverse()) {
+      const active = await candidate.locator('a.linked.formlink, [name="vcr_next"], [name="vcr_prev"]').count().catch(() => 0);
+      if (active) return candidate;
+    }
+    return frames[frames.length - 1];
   }
 
   async login({ username = this.options.username, password = this.options.password, manual = false } = {}) {
@@ -111,17 +117,39 @@ export class ServiceNowClient {
   async readTablePage() {
     const frame = await this.frame();
     const snapshot = await frame.locator('body').evaluate(() => {
+      const isVisible = (node) => {
+        if (!node || !node.isConnected) return false;
+        if (typeof node.checkVisibility === 'function') return node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+        const style = getComputedStyle(node); const rect = node.getBoundingClientRect();
+        return style.display !== 'none' && style.visibility !== 'hidden' && style.visibility !== 'collapse' && Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0;
+      };
+      const isEnabled = (node) => !node.disabled && node.getAttribute('aria-disabled') !== 'true' && !node.classList.contains('disabled') && !node.closest('.disabled, [aria-disabled="true"]');
       const tables = [...document.querySelectorAll('table')];
-      const table = tables.find((candidate) => candidate.querySelector('a.linked.formlink')) || tables.find((candidate) => candidate.querySelector('tbody tr'));
-      if (!table) return { headers: [], rows: [], signature: document.body.innerText.slice(0, 300), totalText: document.body.innerText };
+      const table = tables.filter(isVisible).map((node) => ({ node, links: node.querySelectorAll('a.linked.formlink').length })).sort((a, b) => b.links - a.links)[0]?.node || tables.find((node) => node.querySelector('tbody tr'));
+      if (!table) return { headers: [], rows: [], signature: document.body.innerText.slice(0, 300), totalText: document.body.innerText, next: null, previous: null, pagerText: '' };
       const headerNodes = [...table.querySelectorAll('thead th, tr:first-child th, tr:first-child td')];
       const headers = headerNodes.map((node) => node.innerText.trim() || node.getAttribute('aria-label') || node.dataset.field || '');
       const rowNodes = [...table.querySelectorAll('tbody tr')].filter((row) => row.querySelector('a.linked.formlink') || /CTASK\d+/i.test(row.innerText));
       const rows = rowNodes.map((row) => ({ text: row.innerText, cells: [...row.querySelectorAll('td')].map((cell) => ({ text: cell.innerText.trim(), field: cell.dataset.field || cell.getAttribute('data-column') || '', href: cell.querySelector('a.linked.formlink')?.href || '' })), href: row.querySelector('a.linked.formlink')?.href || '' }));
       const buttons = [...document.querySelectorAll('button, a, input')];
-      const next = buttons.find((node) => /next|berikut/i.test(node.innerText || node.value || node.getAttribute('aria-label') || '') && !node.disabled);
-      const previous = buttons.find((node) => /previous|prev|sebelum/i.test(node.innerText || node.value || node.getAttribute('aria-label') || '') && !node.disabled);
-      return { headers, rows, signature: `${rows.map((row) => row.text).join('|')}|${document.body.innerText.slice(-200)}`, totalText: document.body.innerText, next: next ? { text: next.innerText || next.value, selector: next.id ? `#${next.id}` : '' } : null, previous: previous ? { text: previous.innerText || previous.value, selector: previous.id ? `#${previous.id}` : '' } : null };
+      const pager = [...document.querySelectorAll('.vcr_page, [name="vcr_page"], .list_pager, .pagination')].find(isVisible);
+      const pagerText = pager ? (pager.tagName === 'SELECT' ? pager.selectedOptions[0]?.textContent?.trim() || '' : (pager.innerText || pager.value || '').trim()) : '';
+      const selectorFor = (node) => node?.id ? `#${CSS.escape(node.id)}` : '';
+      const control = (kind) => {
+        const name = kind === 'next' ? 'vcr_next' : 'vcr_prev';
+        const suffix = kind === 'next' ? '_next' : '_prev';
+        const words = kind === 'next' ? /next|berikut/i : /previous|\bprev\b|sebelum/i;
+        const matches = buttons.filter((node) => {
+          const text = node.innerText || node.value || node.getAttribute('aria-label') || '';
+          return node.getAttribute('name') === name || (node.id || '').endsWith(suffix) || words.test(text);
+        });
+        const named = matches.filter((node) => node.getAttribute('name') === name || (node.id || '').endsWith(suffix));
+        const pool = named.length ? named : matches;
+        const visible = pool.filter(isVisible);
+        const node = visible.length ? visible.find(isEnabled) : pool.find(isEnabled);
+        return node ? { text: (node.innerText || node.value || '').trim(), selector: selectorFor(node), visible: isVisible(node) } : null;
+      };
+      return { headers, rows, signature: `${rows.map((row) => row.text).join('|')}|${pagerText}`, totalText: document.body.innerText, pagerText, next: control('next'), previous: control('prev') };
     });
     const parsed = parseTableRows(snapshot);
     const totalMatch = snapshot.totalText.match(/(?:of|dari|total)\s+(\d[\d,.]*)/i);
@@ -130,6 +158,68 @@ export class ServiceNowClient {
 
   async estimate() { return this.readTablePage(); }
 
+  async paginationLocator(frame, kind) {
+    const name = kind === 'next' ? 'vcr_next' : 'vcr_prev';
+    const suffix = kind === 'next' ? '_next' : '_prev';
+    const explicit = frame.locator(`[name="${name}"], [id$="${suffix}"]`);
+    if (await explicit.count()) return explicit;
+    const words = kind === 'next' ? /next|berikut/i : /previous|prev|sebelum/i;
+    const role = frame.getByRole('button', { name: words });
+    if (await role.count()) return role;
+    const link = frame.getByRole('link', { name: words });
+    return await link.count() ? link : null;
+  }
+
+  async findPagination(frame, kind) {
+    const locator = await this.paginationLocator(frame, kind);
+    if (!locator) return null;
+    const visible = []; const hidden = []; let visibleDisabled = false;
+    for (let index = 0; index < await locator.count(); index += 1) {
+      const item = locator.nth(index);
+      const state = await item.evaluate((node) => {
+        const shown = typeof node.checkVisibility === 'function'
+          ? node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+          : (() => { const style = getComputedStyle(node); const rect = node.getBoundingClientRect(); return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0 && rect.width > 0 && rect.height > 0; })();
+        const disabled = node.disabled || node.getAttribute('aria-disabled') === 'true' || node.classList.contains('disabled') || Boolean(node.closest('.disabled, [aria-disabled="true"]'));
+        return { visible: shown, disabled, text: (node.innerText || node.value || node.getAttribute('aria-label') || '').trim() };
+      }).catch(() => null);
+      if (!state) continue;
+      if (state.visible) {
+        if (state.disabled) visibleDisabled = true;
+        else visible.push({ locator: item, hidden: false, text: state.text });
+      } else if (!state.disabled) hidden.push({ locator: item, hidden: true, text: state.text });
+    }
+    if (visible.length) return visible[0];
+    if (visibleDisabled) return null;
+    return hidden[0] || null;
+  }
+
+  async clickPagination(frame, kind) {
+    const target = await this.findPagination(frame, kind);
+    if (!target) return false;
+    if (!target.hidden) {
+      try { await target.locator.click({ timeout: 5000 }); return true; }
+      catch (error) { warn('Klik pagination normal gagal; mencoba klik DOM', { kind, message: error.message }); }
+    }
+    try {
+      await target.locator.evaluate((node) => { node.scrollIntoView?.({ block: 'center' }); node.click(); });
+      return true;
+    } catch (error) {
+      warn('Klik pagination gagal', { kind, message: error.message });
+      return false;
+    }
+  }
+
+  async waitForPageChange(signature, timeout = this.options.pageChangeTimeout || 10000) {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      await this.page.waitForTimeout(200);
+      const current = await this.readTablePage().catch(() => null);
+      if (current && current.signature !== signature) return true;
+    }
+    return false;
+  }
+
   async goToFirstPage({ maxPages = 100 } = {}) {
     const seen = new Set();
     for (let index = 0; index < maxPages; index += 1) {
@@ -137,28 +227,30 @@ export class ServiceNowClient {
       if (!page.previous || seen.has(page.signature)) return page;
       seen.add(page.signature);
       const frame = await this.frame();
-      const previous = frame.locator(page.previous.selector || 'button, a, input').filter({ hasText: /previous|prev|sebelum/i }).first();
-      if (!(await previous.count())) return page;
-      await previous.click();
-      await this.page.waitForTimeout(300);
+      if (!(await this.clickPagination(frame, 'previous'))) return page;
+      if (!(await this.waitForPageChange(page.signature))) {
+        warn('Halaman tidak berubah setelah Previous; pagination dihentikan', { page: page.pagerText || index + 1 });
+        return page;
+      }
     }
     return this.readTablePage();
   }
 
   async readAllTickets({ maxPages = 100 } = {}) {
-    await this.goToFirstPage();
+    await this.goToFirstPage({ maxPages });
     const result = []; const seenSignatures = new Set(); let pageCount = 0;
     while (pageCount < maxPages) {
-      const page = await this.readTablePage(); pageCount += 1;
-      if (seenSignatures.has(page.signature)) { pageCount -= 1; break; }
-      seenSignatures.add(page.signature);
+      const page = await this.readTablePage();
+      if (seenSignatures.has(page.signature)) break;
+      seenSignatures.add(page.signature); pageCount += 1;
       result.push(...page.tickets);
       if (!page.next) break;
       const frame = await this.frame();
-      const next = frame.locator(page.next.selector || 'button, a, input').filter({ hasText: /next|berikut/i }).first();
-      if (!(await next.count())) break;
-      await next.click();
-      await this.page.waitForFunction((signature) => document.body.innerText.slice(0, 2000) !== signature, page.signature.slice(0, 2000), { timeout: 10000 }).catch(() => {});
+      if (!(await this.clickPagination(frame, 'next'))) break;
+      if (!(await this.waitForPageChange(page.signature))) {
+        warn('Halaman tidak berubah setelah Next; pagination dihentikan', { page: page.pagerText || pageCount });
+        break;
+      }
     }
     const unique = deduplicateTickets(result);
     info('Seluruh halaman tabel selesai dibaca', { pages: pageCount, tickets: unique.length });
