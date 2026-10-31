@@ -1,10 +1,6 @@
 # Service Scraper 
 Aplikasi ini adalah dashboard lokal untuk login ke ServiceNow melalui Playwright, memilih filter secara dinamis, membaca semua halaman tabel, mengambil detail dan Activities satu per satu, menyimpan checkpoint JSON, dan membuat laporan PDF patch release.
 
-## Status workspace
-
-Workspace awal tidak berisi source prototype. Implementasi ini mempertahankan selector dan alur navigasi yang disebutkan pada spesifikasi. Pencocokan visual PDF dan smoke test produksi memerlukan file referensi serta akses ServiceNow yang valid.
-
 ## Instalasi
 
 1. Gunakan Node.js 20 atau lebih baru.
@@ -50,12 +46,6 @@ Workspace frontend menyediakan area Dashboard, Scraping tickets, Data tickets, R
 
 Checkpoint tersimpan sebagai `output/<filter>-checkpoint.json` setelah setiap tiket. JSON ekspor menggunakan penulisan atomik dan memiliki metadata, data tabel, detail, Activities, status, serta error per tiket.
 
-## PDF
-
-API PDF menerima `ticketNumbers`, `period`, dan `overrides`. Upload bukti tersedia melalui `/api/upload-evidence`; gambar yang tersimpan diteruskan ke generator melalui opsi `screenshots`.
-
-Laporan menggunakan layout Letter portrait yang diukur dari `assets/template-reference.png`. Logo lokal default berada di `assets/pelindo-logo.png`; generator menghentikan ekspor dengan error informatif apabila aset tersebut tidak ditemukan. Fixture dan pemeriksaan layout tersedia melalui `npm run test:visual`.
-
 ## Testing
 
 ```bash
@@ -66,10 +56,6 @@ npm run test:e2e
 npm run lint
 ```
 
-Tes unit memeriksa mapping, status, HTML, Activities, deduplikasi, metadata, validasi, dan data laporan. Tes integrasi memeriksa checkpoint JSON dan PDF. E2E memeriksa dashboard lokal dan tidak adanya kredensial dalam UI. Tidak ada tes yang melakukan scraping produksi.
-
-Fixture mapping aktual berada di `tests/fixtures/actual-servicenow-result.json` dengan expected mapping di `tests/fixtures/actual-servicenow-expected.json`. Pemeriksaan UI Hallmark menggunakan `node C:/Users/admin/.agents/skills/hallmark/scripts/sloplint.mjs public --scope app --genre modern-minimal --kept`.
-
 Smoke test live opsional:
 
 ```bash
@@ -78,6 +64,3 @@ npm run live:smoke
 
 Perintah tersebut hanya berjalan jika `SN_USERNAME` dan `SN_PASSWORD` terisi, membuka browser non-headless, memeriksa login/menu/filter, dan tidak melakukan scraping seluruh data.
 
-## Diagnosis
-
-Jika selector tidak cocok dengan DOM aktual, aplikasi tidak mengarang filter/tiket. Browser dibiarkan terbuka dan `ServiceNowClient.diagnose()` dapat menyimpan snapshot DOM ke `diagnostics/`. Periksa log untuk tahap login, menu, filter, tabel, pagination, detail, Activities, checkpoint, dan ekspor.

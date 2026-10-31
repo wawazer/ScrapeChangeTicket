@@ -82,8 +82,8 @@ test('Pelindo PDF visual fixture embeds the local logo and evidence in Letter la
   assert.equal(canvas.width, 918);
   assert.equal(canvas.height, 1188);
   // These are the measured reference table boundaries at 1.5x render scale.
-  for (const y of [173, 202, 289, 373, 432, 461, 491, 607, 636, 694, 900, 1016]) assert.ok(hasDarkLine(image, y, true), `missing horizontal boundary near y=${y}`);
-  for (const x of [96, 196, 346, 473, 807]) assert.ok(hasDarkLine(image, x, false), `missing vertical boundary near x=${x}`);
+  for (const y of [163, 190, 271, 349, 403, 430, 457, 563, 590, 643, 833, 886, 938]) assert.ok(hasDarkLine(image, y, true), `missing horizontal boundary near y=${y}`);
+  for (const x of [134, 226, 364, 481, 787]) assert.ok(hasDarkLine(image, x, false), `missing vertical boundary near x=${x}`);
   // A blue logo pixel must exist in the measured header area.
   let bluePixels = 0;
   for (let y = 20; y < 100; y += 1) for (let x = 540; x < 790; x += 1) {
@@ -91,4 +91,17 @@ test('Pelindo PDF visual fixture embeds the local logo and evidence in Letter la
     if (image.data[offset + 2] > image.data[offset] + 40) bluePixels += 1;
   }
   assert.ok(bluePixels > 100, 'rendered logo is missing from the header');
+  // Footer: black page block plus the grey "Laporan Patch Release" label.
+  let footerPixels = 0;
+  for (let y = 1130; y < 1180; y += 1) for (let x = 90; x < 170; x += 1) {
+    const offset = (y * image.width + x) * 4;
+    if (image.data[offset] < 40 && image.data[offset + 1] < 40 && image.data[offset + 2] < 40) footerPixels += 1;
+  }
+  assert.ok(footerPixels > 2000, 'rendered footer block is missing');
+  let footerText = 0;
+  for (let y = 1140; y < 1156; y += 1) for (let x = 580; x < 740; x += 1) {
+    const offset = (y * image.width + x) * 4;
+    if (image.data[offset] > 80 && image.data[offset] < 180) footerText += 1;
+  }
+  assert.ok(footerText > 100, 'rendered footer label is missing');
 });
