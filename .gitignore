@@ -9,3 +9,6 @@ AGENTS.md
 .gitignore
 .tmp/
 reference/
+.opencode/
+.opencode1/
+.hallmark/
