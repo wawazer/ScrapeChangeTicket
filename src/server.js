@@ -91,8 +91,12 @@ app.post('/api/login', async (req, res) => {
   catch (err) { error('Login gagal', { message: err.message }); res.status(500).json({ error: err.message }); }
 });
 app.post('/api/filters/refresh', async (_req, res) => {
-  try { const client = await ensureClient(); state.filters = await client.openFilters(); res.json({ filters: state.filters }); }
-  catch (err) { addLog(err.message, 'error'); res.status(500).json({ error: err.message, filters: [] }); }
+  try {
+    const client = await ensureClient();
+    state.filters = await client.openFilters();
+    info('Daftar filter dikirim ke frontend', { count: state.filters.length, filters: state.filters.map((filter) => filter.name) });
+    res.json({ filters: state.filters });
+  } catch (err) { addLog(err.message, 'error'); res.status(500).json({ error: err.message, filters: [] }); }
 });
 app.get('/api/filters', (_req, res) => res.json({ filters: state.filters, selected: state.selectedFilter }));
 app.post('/api/filters/select', async (req, res) => {

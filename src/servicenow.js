@@ -1,13 +1,19 @@
 import { chromium } from 'playwright';
 import { config } from './config.js';
 import { info, warn } from './logger.js';
-import { retry, ticketNumber } from './utils.js';
+import { retry, sleep, ticketNumber } from './utils.js';
 import { deduplicateTickets, parseActivities, parseDetailFields, parseTableRows } from './parsers.js';
 
 export const SELECTORS = {
   frame: 'gsft_main', menu: 'Change - My Change Task', control: '#change_task_control_button',
-  filterMenu: 'div[item_id="b17a69630a0a0bbb00f2601a9fa1e2da"]', filterItem: 'div.context_item', ticket: 'a.linked.formlink'
+  filterItem: 'div.context_item', ticket: 'a.linked.formlink'
 };
+
+const ACTION_FILTER_IDS = new Set(['--personal--', '--none--']);
+const isFilterEntry = (item) => Boolean(item.name)
+  && !ACTION_FILTER_IDS.has(item.id)
+  && !/^(loading|memuat)\b/i.test(item.name)
+  && !/^edit personal filters$/i.test(item.name);
 
 export class ServiceNowClient {
   constructor(options = {}) {
@@ -46,9 +52,11 @@ export class ServiceNowClient {
     if (username && password) {
       const user = this.page.locator('input[name="user_name"], input[name="username"], input[type="email"], #user_name').first();
       const pass = this.page.locator('input[name="user_password"], input[name="password"], input[type="password"]').first();
-      if (await user.count() && await pass.count()) {
+      const formReady = await user.waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false);
+      if (formReady && await pass.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
         await user.fill(username); await pass.fill(password);
         await this.page.locator('button[type="submit"], input[type="submit"], #login_button').first().click();
+        await this.page.waitForURL((url) => !/portalpelindo|login/i.test(url.href), { timeout: 20000 }).catch(() => {});
         await this.page.waitForLoadState('domcontentloaded').catch(() => {});
       } else warn('Form login otomatis tidak ditemukan; browser tetap terbuka untuk login manual');
     } else if (manual) info('Kredensial kosong; silakan selesaikan login manual pada browser');
@@ -79,36 +87,126 @@ export class ServiceNowClient {
     return this.frame();
   }
 
-  async openFilters() {
-    const frame = await this.frame();
-    info('Membuka menu Filters');
-    const control = frame.locator(SELECTORS.control).first();
-    if (await control.count()) await control.click();
-    const menu = frame.locator(SELECTORS.filterMenu).first();
-    if (await menu.count()) await menu.click().catch(() => {});
-    else {
-      const fallback = frame.getByText(/Filters?/i).first();
-      if (await fallback.count()) await fallback.click().catch(() => {});
-    }
-    await this.page.waitForTimeout(250);
-    return this.listFilters();
+  async openList() {
+    const url = `${this.options.baseUrl}/now/nav/ui/classic/params/target/change_task_list.do?favorsort=number`;
+    await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+    await this.page.waitForTimeout(3000);
+    this.listUrl = this.page.url();
+    return this.frame();
   }
 
-  async listFilters() {
-    const frame = await this.frame();
-    const items = await frame.locator(SELECTORS.filterItem).evaluateAll((nodes) => nodes.map((node) => ({
-      name: (node.innerText || node.textContent || '').trim(), id: node.getAttribute('item_id') || node.dataset.filterId || '',
-      href: node.querySelector('a')?.href || ''
-    })).filter((item) => item.name));
-    if (!items.length) warn('Filter tidak terdeteksi otomatis; gunakan browser terbuka untuk diagnosis/manual selection');
+  async openFilters() {
+    let frame = await this.frame();
+    let opened = await this.ensureListControlsOpen(frame);
+    if (!opened && !(await frame.locator(SELECTORS.control).count())) {
+      info('Halaman daftar Change Task belum aktif; membuka daftar Change Task');
+      if (!(await this.isLoggedIn())) throw new Error('Sesi ServiceNow belum login; selesaikan login terlebih dahulu');
+      frame = await this.openList();
+      opened = await this.ensureListControlsOpen(frame);
+    }
+    const entry = opened ? frame.locator('div.context_item[data-context-menu-label="Filters"]:visible').first() : null;
+    let items = [];
+    if (entry && await entry.count()) {
+      info('Item Filters ditemukan di menu List controls');
+      ({ items } = await this.waitForFiltersSubmenu(frame, 700));
+      if (items.length) info('Submenu Filters sudah terbuka');
+      else {
+        info('Membuka submenu Filters');
+        await entry.hover({ timeout: 5000 }).catch((err) => warn('Gagal membuka submenu Filters (hover)', { message: err.message }));
+        ({ items } = await this.waitForFiltersSubmenu(frame, 3000));
+        if (!items.length) {
+          await entry.click({ timeout: 5000 }).catch((err) => warn('Gagal membuka submenu Filters (klik)', { message: err.message }));
+          ({ items } = await this.waitForFiltersSubmenu(frame, 3000));
+        }
+        if (items.length) info('Submenu Filters terbuka');
+      }
+    }
+    // Fallback untuk DOM sederhana yang sudah menampilkan item filter secara flat.
+    if (!items.length) items = await this.visibleFilterItems(frame);
+    if (!items.length) throw new Error('Daftar filter tidak terbaca dari menu ServiceNow; periksa browser untuk diagnosis');
+    info(`${items.length} filter ditemukan`);
+    info('Nama filter berhasil dibaca', { filters: items.map((item) => item.name) });
     return items;
+  }
+
+  async ensureListControlsOpen(frame) {
+    const control = frame.locator(SELECTORS.control).first();
+    if (!(await control.count())) {
+      warn('Tombol List controls tidak ditemukan pada frame aktif');
+      return false;
+    }
+    const menuShown = () => this.contextMenuVisible(frame, 'List controls');
+    if ((await control.getAttribute('aria-expanded').catch(() => null)) === 'true' || (await menuShown())) {
+      info('Menu List controls sudah terbuka; tombol tidak diklik ulang');
+      return true;
+    }
+    info('Membuka menu List controls');
+    await control.scrollIntoViewIfNeeded().catch(() => {});
+    try {
+      await control.click({ timeout: 5000 });
+    } catch (err) {
+      warn('Klik tombol List controls terhalang; mencoba klik DOM', { message: err.message });
+      await control.dispatchEvent('click').catch(() => {});
+    }
+    const deadline = Date.now() + 4000;
+    while (Date.now() < deadline) {
+      if (await menuShown()) { info('Menu List controls terbuka'); return true; }
+      await sleep(150);
+    }
+    warn('Menu List controls tidak terdeteksi terbuka setelah klik');
+    return false;
+  }
+
+  async contextMenuVisible(frame, label) {
+    return frame.evaluate((name) => {
+      const visible = (el) => !!(el && (el.checkVisibility ? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) : !!(el.offsetParent || el.getClientRects().length)));
+      return [...document.querySelectorAll('div.context_menu')]
+        .some((menu) => new RegExp(`^${name}$`, 'i').test((menu.getAttribute('aria-label') || '').trim()) && visible(menu));
+    }, label).catch(() => false);
+  }
+
+  async waitForFiltersSubmenu(frame, timeout) {
+    const readOnce = () => frame.evaluate(() => {
+      const visible = (el) => !!(el && (el.checkVisibility ? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) : !!(el.offsetParent || el.getClientRects().length)));
+      const menus = [...document.querySelectorAll('div.context_menu')]
+        .filter((menu) => /^filters?$/i.test((menu.getAttribute('aria-label') || '').trim()) && visible(menu));
+      if (!menus.length) return { open: false, items: [] };
+      const submenu = menus[menus.length - 1];
+      const items = [...submenu.children]
+        .filter((node) => node.classList.contains('context_item') && visible(node))
+        .map((node) => ({ name: (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim(), id: node.getAttribute('item_id') || node.dataset?.filterId || '', href: node.querySelector('a')?.href || '' }));
+      return { open: true, items };
+    }).catch(() => ({ open: false, items: [] }));
+    let state = await readOnce();
+    const deadline = Date.now() + timeout;
+    while (!state.open && Date.now() < deadline) {
+      await sleep(150);
+      state = await readOnce();
+    }
+    return { open: state.open, items: state.items.filter(isFilterEntry) };
+  }
+
+  async visibleFilterItems(frame) {
+    const items = await frame.evaluate(() => {
+      const visible = (el) => !!(el && (el.checkVisibility ? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) : !!(el.offsetParent || el.getClientRects().length)));
+      return [...document.querySelectorAll('.context_item')]
+        .filter(visible)
+        .map((node) => ({ name: (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim(), id: node.getAttribute('item_id') || node.dataset?.filterId || '', href: node.querySelector('a')?.href || '' }))
+        .filter((item) => item.name);
+    }).catch(() => []);
+    return items.filter(isFilterEntry);
   }
 
   async selectFilter(name) {
     const frame = await this.frame();
-    const item = frame.locator(SELECTORS.filterItem).filter({ hasText: name }).first();
+    const locator = () => frame.locator('div.context_menu[aria-label="Filters"] div.context_item:visible, div.context_item:visible').filter({ hasText: name }).first();
+    let item = locator();
+    if (!(await item.count())) {
+      await this.openFilters();
+      item = locator();
+    }
     if (!(await item.count())) throw new Error(`Filter "${name}" tidak ditemukan di DOM ServiceNow`);
-    await item.click(); await this.page.waitForTimeout(700);
+    await item.click({ timeout: 5000 }); await this.page.waitForTimeout(700);
     this.listUrl = this.page.url();
     info('Filter dipilih', { filter: name });
     return this.readTablePage();
