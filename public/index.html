@@ -22,8 +22,8 @@
         <button class="nav-item" type="button" data-view-link="history"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5M12 7v5l3 2"/></svg><span>Riwayat scraping</span></button>
         <button class="nav-item" type="button" data-view-link="tickets"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 10h16M8 5v5M12 14h5M8 14h1M8 17h6"/></svg><span>Data tickets</span></button>
         <button class="nav-item" type="button" data-view-link="reports"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM15 3v4h4M9 12h6M9 16h6"/></svg><span>Export reports</span></button>
-        <p class="nav-title nav-title-settings">System</p>
-        <button class="nav-item" type="button" data-view-link="settings"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 1.2 1.9 2.2.4.8 2.1 2 .9-.2 2.2 1.3 1.8-1.3 1.8.2 2.2-2 .9-.8 2.1-2.2.4L12 21l-1.2-1.9-2.2-.4-.8-2.1-2-.9.2-2.2L4.7 12 6 10.2l-.2-2.2 2-.9.8-2.1 2.2-.4zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg><span>Settings</span></button>
+        <!-- <p class="nav-title nav-title-settings">System</p>
+        <button class="nav-item" type="button" data-view-link="settings"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 1.2 1.9 2.2.4.8 2.1 2 .9-.2 2.2 1.3 1.8-1.3 1.8.2 2.2-2 .9-.8 2.1-2.2.4L12 21l-1.2-1.9-2.2-.4-.8-2.1-2-.9.2-2.2L4.7 12 6 10.2l-.2-2.2 2-.9.8-2.1 2.2-.4zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg><span>Settings</span></button> -->
       </nav>
       <div class="connection-panel">
         <div class="connection-line"><span class="status-dot" id="connectionDot"></span><span id="connection">Browser belum dibuka</span></div>
@@ -62,10 +62,10 @@
           <div class="page-heading"><div><h1 id="reportsTitle">Export reports</h1><p class="page-lead">Seluruh tiket hasil scraping filter aktif diekspor sekaligus dalam format PDF atau Excel.</p></div><a class="button button-secondary" id="jsonExportReports" href="/api/export/json">Unduh JSON lengkap</a></div>
           <div class="report-grid report-grid-single"><section class="panel report-panel"><div class="panel-header"><div><h2>Laporan patch release</h2><p class="panel-subtitle">Template Pelindo A4 portrait untuk seluruh tiket hasil scraping terakhir.</p></div><span class="file-badge">PDF / XLSX</span></div><dl class="export-summary"><div><dt>Filter</dt><dd id="exportFilter">Belum ada hasil</dd></div><div><dt>Tiket diekspor</dt><dd id="exportCount">0</dd></div><div><dt>Gagal diproses</dt><dd id="exportFailed">0</dd></div></dl><div class="field-group"><label for="period">Periode laporan</label><input id="period" autocomplete="off" placeholder="September 2026"></div><div class="field-group"><label for="resultDefault">Result default</label><select id="resultDefault"><option>Other</option><option>Success</option><option>Warning</option><option>Error</option></select></div><div class="report-actions"><button class="button button-secondary" type="button" id="previewPdf" disabled>Preview PDF</button><button class="button button-primary" type="button" id="pdfExport" disabled>Export PDF</button><button class="button button-primary" type="button" id="excelExport" disabled>Export Excel</button></div><p class="status-message" id="reportMessage">Belum ada hasil scraping.</p></section></div>
         </section>
-
+<!-- 
         <section class="view" data-view="settings" aria-labelledby="settingsTitle" hidden>
           <div class="page-heading"><div><h1 id="settingsTitle">Settings</h1><p class="page-lead">Informasi sesi dan batas operasional aplikasi lokal.</p></div></div><div class="settings-grid"><section class="panel"><h2>ServiceNow session</h2><dl class="context-list"><div><dt>Status browser</dt><dd id="settingsConnection">Belum dibuka</dd></div><div><dt>Filter aktif</dt><dd id="settingsFilter">Belum dipilih</dd></div><div><dt>Endpoint</dt><dd>Configured in local environment</dd></div></dl></section><section class="panel"><h2>Export assets</h2><dl class="context-list"><div><dt>Logo</dt><dd>assets/pelindo-logo.png</dd></div><div><dt>Template</dt><dd>Letter portrait, patch release Pelindo</dd></div><div><dt>Output</dt><dd>Folder output lokal</dd></div></dl></section></div>
-        </section>
+        </section> -->
       </div>
     </main>
   </div>

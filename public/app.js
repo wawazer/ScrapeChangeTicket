@@ -40,7 +40,7 @@ function announce(message, level = 'info') {
 
 function showView(view) {
   activeView = view;
-  const names = { dashboard: 'Dashboard', scrape: 'Scraping tickets', history: 'Riwayat scraping', tickets: 'Data tickets', reports: 'Export reports', settings: 'Settings' };
+  const names = { dashboard: 'Dashboard', scrape: 'Scraping tickets', history: 'Riwayat scraping', tickets: 'Data tickets', reports: 'Export reports' };
   $$('.view').forEach((section) => {
     const visible = section.dataset.view === view;
     section.hidden = !visible;
