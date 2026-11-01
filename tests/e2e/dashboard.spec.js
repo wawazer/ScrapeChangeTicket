@@ -14,5 +14,8 @@ test('workspace navigation exposes data and report views', async ({ page }) => {
   await expect(page.getByText(/Belum ada data tiket/)).toBeVisible();
   await page.getByRole('button', { name: 'Export reports' }).click();
   await expect(page.getByRole('heading', { name: 'Export reports' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Buat dan unduh PDF' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export PDF' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export Excel' })).toBeVisible();
+  await expect(page.locator('#pdfExport')).toBeDisabled();
+  await expect(page.locator('#excelExport')).toBeDisabled();
 });

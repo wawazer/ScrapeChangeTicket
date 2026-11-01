@@ -1,11 +1,13 @@
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 let currentState = { tickets: [] };
-let selected = new Set();
 let activeView = 'dashboard';
 let lastHistoryKey = '';
 let ticketPage = 1;
 let ticketPageSize = 8;
+let exportBusy = false;
+let exportNotice = null;
+let lastState = {};
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 const isSysId = (value) => /^[a-f0-9]{24,40}$/i.test(String(value ?? '').trim());
@@ -73,6 +75,7 @@ function saveHistory(run, job) {
 }
 
 function render(state) {
+  lastState = state;
   currentState = state.run || { tickets: [] };
   const metadata = currentState.metadata || {};
   const job = state;
@@ -113,7 +116,7 @@ function render(state) {
   renderActivity(job);
   setText('#logs', (job.logs || []).map((entry) => `[${new Date(entry.at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}] ${entry.message}`).join('\n') || 'Belum ada log.');
   renderTickets();
-  renderSelectedTickets();
+  renderExport(state);
   renderHistory();
   if (state.run) saveHistory(state.run, job);
 }
@@ -175,19 +178,77 @@ function renderTickets() {
     const detailStatus = ticket.detail_tiket?.status?.nama || ticket.detail_tiket?.status?.kode || 'Belum tersedia';
     const description = tableValue(ticket, 'deskripsi_permasalahan_text', tableValue(ticket, 'deskripsi_permasalahan', 'Belum tersedia'));
     const assigned = value(ticket.detail_tiket?.ditugaskan_kepada, ticket.detail_tiket?.pic, ticket.data_tabel?.ditugaskan_kepada);
-    return `<tr data-preview-ticket="${number}"><td><input type="checkbox" data-ticket="${number}" ${selected.has(ticket.nomor_tiket) ? 'checked' : ''} aria-label="Pilih ${number}"></td><td><button class="table-link" type="button" data-open-ticket="${number}">${number}</button></td><td>${escapeHtml(tableValue(ticket, 'created'))}</td><td>${escapeHtml(tableValue(ticket, 'change_request'))}</td><td class="description-cell">${escapeHtml(String(description).slice(0, 90))}</td><td>${escapeHtml(assigned)}</td><td><span class="status-badge status-neutral">${escapeHtml(detailStatus)}</span></td><td><span class="status-badge ${statusClass(scrape)}">${escapeHtml(statusLabel(scrape))}</span>${ticket.errors?.length ? '<small class="validation-note">Ada catatan</small>' : ''}</td></tr>`;
-  }).join('') : '<tr><td colspan="8" class="empty-cell">Tidak ada tiket yang cocok. Periksa pencarian atau jalankan scraping.</td></tr>';
-  $$('[data-ticket]', body).forEach((checkbox) => checkbox.addEventListener('change', (event) => { const number = event.target.dataset.ticket; if (event.target.checked) selected.add(number); else selected.delete(number); renderSelectedTickets(); }));
+    return `<tr data-preview-ticket="${number}"><td><button class="table-link" type="button" data-open-ticket="${number}">${number}</button></td><td>${escapeHtml(tableValue(ticket, 'created'))}</td><td>${escapeHtml(tableValue(ticket, 'change_request'))}</td><td class="description-cell">${escapeHtml(String(description).slice(0, 90))}</td><td>${escapeHtml(assigned)}</td><td><span class="status-badge status-neutral">${escapeHtml(detailStatus)}</span></td><td><span class="status-badge ${statusClass(scrape)}">${escapeHtml(statusLabel(scrape))}</span>${ticket.errors?.length ? '<small class="validation-note">Ada catatan</small>' : ''}</td></tr>`;
+  }).join('') : '<tr><td colspan="7" class="empty-cell">Tidak ada tiket yang cocok. Periksa pencarian atau jalankan scraping.</td></tr>';
   $$('[data-open-ticket]', body).forEach((button) => button.addEventListener('click', () => openTicket(button.dataset.openTicket)));
 }
 
-function renderSelectedTickets() {
-  const box = $('#selectedTickets');
+function renderExport(state, options = {}) {
+  const info = state.export || {};
+  const count = info.count || 0;
+  const ready = Boolean(info.ready) && !exportBusy;
+  setText('#exportFilter', info.filter || 'Belum ada hasil scraping');
+  setText('#exportCount', count.toLocaleString('id-ID'));
+  setText('#exportFailed', (info.failed || 0).toLocaleString('id-ID'));
+  const pdf = $('#pdfExport'); const excel = $('#excelExport'); const preview = $('#previewPdf');
+  if (pdf) { pdf.disabled = !ready; pdf.textContent = ready ? `Export PDF (${count} tiket)` : 'Export PDF'; }
+  if (excel) { excel.disabled = !ready; excel.textContent = ready ? `Export Excel (${count} tiket)` : 'Export Excel'; }
+  if (preview) preview.disabled = !ready;
+  const period = $('#period');
+  if (period && !period.value && info.filter) period.value = info.filter;
+  if (exportBusy || options.keepMessage) return;
+  const signature = `${info.filter || ''}|${count}|${Boolean(info.ready)}`;
+  if (exportNotice && exportNotice.signature !== signature) exportNotice = null;
+  if (exportNotice) { reportStatus(exportNotice.text, exportNotice.level); return; }
+  const message = !info.ready ? (info.reason || 'Belum ada hasil scraping.') : `${count} tiket siap diekspor${info.failed ? `; ${info.failed} tiket gagal tidak disertakan` : ''}.`;
+  reportStatus(message, info.ready ? 'info' : 'warning');
+}
+
+function reportStatus(message, level = 'info') {
+  const box = $('#reportMessage');
   if (!box) return;
-  const tickets = currentState.tickets.filter((ticket) => selected.has(ticket.nomor_tiket));
-  box.innerHTML = tickets.length ? tickets.map((ticket) => `<div class="selected-ticket"><span>${escapeHtml(ticket.nomor_tiket)}</span><button type="button" data-remove-ticket="${escapeHtml(ticket.nomor_tiket)}" aria-label="Hapus ${escapeHtml(ticket.nomor_tiket)}">×</button></div>`).join('') : '<p class="empty-copy">Belum ada tiket dipilih.</p>';
-  $$('[data-remove-ticket]', box).forEach((button) => button.addEventListener('click', () => { selected.delete(button.dataset.removeTicket); renderTickets(); renderSelectedTickets(); }));
-  setText('#reportMessage', tickets.length ? `${tickets.length} tiket siap diekspor.` : 'Belum ada tiket yang dipilih.');
+  box.textContent = message;
+  box.classList.toggle('is-error', level === 'error');
+}
+
+function exportFilename(extension) {
+  const base = String(lastState.export?.filter || 'servicenow').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '');
+  return `laporan-${base || 'servicenow'}.${extension}`;
+}
+
+async function downloadExport(url, options, filename) {
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Export gagal. Periksa log aplikasi.');
+  }
+  const blob = await response.blob();
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link); link.click(); link.remove();
+  URL.revokeObjectURL(link.href);
+  return blob.size;
+}
+
+async function runExport({ url, options, extension, label }) {
+  if (exportBusy) return;
+  exportBusy = true;
+  const info = lastState.export || {};
+  const signature = `${info.filter || ''}|${info.count || 0}|${Boolean(info.ready)}`;
+  renderExport(lastState, { keepMessage: true });
+  exportNotice = { text: `Membuat ${label} untuk ${info.count || 0} tiket…`, level: 'info', signature };
+  reportStatus(exportNotice.text);
+  try {
+    const size = await downloadExport(url, options, exportFilename(extension));
+    exportNotice.text = `${label} berhasil dibuat dan diunduh (${Math.max(1, Math.round(size / 1024)).toLocaleString('id-ID')} KB).`;
+  } catch (error) {
+    exportNotice = { ...exportNotice, text: error.message, level: 'error' };
+  } finally {
+    exportBusy = false;
+    renderExport(lastState, { keepMessage: true });
+    reportStatus(exportNotice.text, exportNotice.level);
+  }
 }
 
 function renderHistory() {
@@ -243,11 +304,20 @@ $('#selectFilter')?.addEventListener('click', async () => { const name = $('#fil
 $('#startScrape')?.addEventListener('click', async () => { try { await request('/api/scrape', { method: 'POST', body: JSON.stringify({ limit: Number($('#limit').value) || 0, includeScreenshot: $('#includeScreenshot').checked }) }); announce('Scraping dimulai.'); await refresh(); } catch (error) { announce(error.message, 'error'); } });
 for (const action of ['pause', 'resume', 'cancel']) $(`#${action}Scrape`)?.addEventListener('click', async () => { try { await request(`/api/scrape/${action}`, { method: 'POST', body: '{}' }); await refresh(); } catch (error) { announce(error.message, 'error'); } });
 $('#search')?.addEventListener('input', () => { ticketPage = 1; renderTickets(); }); $('#statusFilter')?.addEventListener('change', () => { ticketPage = 1; renderTickets(); });
-const selectedTickets = () => [...selected];
-const exportBody = () => JSON.stringify({ ticketNumbers: selectedTickets(), period: $('#period').value });
-$('#pdfExport')?.addEventListener('click', async () => { const response = await fetch('/api/export/pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: exportBody() }); if (!response.ok) { const data = await response.json(); announce(data.error || 'Ekspor PDF gagal', 'error'); return; } const blob = await response.blob(); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'laporan-patch-release.pdf'; link.click(); URL.revokeObjectURL(link.href); announce('PDF berhasil dibuat.'); });
-$('#previewPdf')?.addEventListener('click', () => { const params = new URLSearchParams({ period: $('#period').value }); const numbers = selectedTickets(); if (numbers.length) params.set('ticketNumbers', numbers.join(',')); window.open(`/api/export/pdf-preview?${params}`, '_blank', 'noopener'); });
-$('#uploadEvidence')?.addEventListener('click', () => { const file = $('#evidence').files[0]; if (!file) { announce('Pilih gambar bukti terlebih dahulu.', 'error'); return; } if (!selectedTickets().length) { announce('Pilih minimal satu tiket untuk bukti perubahan.', 'error'); return; } const reader = new FileReader(); reader.onload = async () => { try { await request('/api/upload-evidence', { method: 'POST', body: JSON.stringify({ dataUrl: reader.result, ticketNumbers: selectedTickets() }) }); announce('Bukti perubahan tersimpan.'); } catch (error) { announce(error.message, 'error'); } }; reader.readAsDataURL(file); });
+$('#pdfExport')?.addEventListener('click', () => runExport({
+  url: '/api/export/pdf',
+  options: { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ period: $('#period').value, resultDefault: $('#resultDefault').value }) },
+  extension: 'pdf',
+  label: 'PDF'
+}));
+$('#excelExport')?.addEventListener('click', () => {
+  const params = new URLSearchParams({ period: $('#period').value || '', resultDefault: $('#resultDefault').value || '' });
+  return runExport({ url: `/api/export/excel?${params}`, options: {}, extension: 'xlsx', label: 'Excel' });
+});
+$('#previewPdf')?.addEventListener('click', () => {
+  const params = new URLSearchParams({ period: $('#period').value || '', resultDefault: $('#resultDefault').value || '' });
+  window.open(`/api/export/pdf-preview?${params}`, '_blank', 'noopener');
+});
 $('#closePreview')?.addEventListener('click', () => $('#ticketPreview').close());
 $('#ticketPreview')?.addEventListener('click', (event) => { if (event.target === $('#ticketPreview')) $('#ticketPreview').close(); });
 window.addEventListener('hashchange', () => showView(location.hash.slice(1) || 'dashboard'));

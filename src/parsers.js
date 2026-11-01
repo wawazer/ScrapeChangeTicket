@@ -187,6 +187,9 @@ export function reportTicket(ticket, overrides = {}) {
     return candidates.find((item) => hasUsefulValue(item) && !isSysId(item)) ?? '-';
   };
   const change = value('change', 'change_request');
+  const rawDescription = overrides.description ?? detail.deskripsi_permasalahan_text ?? (htmlToText(detail.deskripsi_permasalahan_html || '') || '-');
+  // Older scrapes stored escaped HTML as text; strip it for report rendering only.
+  const description = /<\/?[a-z][^>]*>/i.test(String(rawDescription)) ? (htmlToText(String(rawDescription)) || '-') : rawDescription;
   return {
     date: value('date', 'created'),
     ticket_number: ticket.nomor_tiket,
@@ -201,7 +204,7 @@ export function reportTicket(ticket, overrides = {}) {
     version: value('version'),
     directory: value('directory'),
     pic: value('pic', 'ditugaskan_kepada'),
-    description: overrides.description ?? detail.deskripsi_permasalahan_text ?? (htmlToText(detail.deskripsi_permasalahan_html || '') || '-'),
+    description,
     result: overrides.result ?? detail.result ?? ticket.report?.result ?? 'Other',
     cause: value('cause'),
     action_plan: value('action_plan')

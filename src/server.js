@@ -7,6 +7,7 @@ import { error, info, warn } from './logger.js';
 import { ServiceNowClient } from './servicenow.js';
 import { createRun, checkpointPath, saveRun, upsertTicket } from './store.js';
 import { generatePdf } from './pdf.js';
+import { generateExcel } from './excel.js';
 import { validateTicketData } from './parsers.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -25,8 +26,34 @@ function addLog(message, level = 'info') {
   state.job.logs = state.job.logs.slice(-100);
 }
 
+const BUSY_STATUSES = ['starting', 'reading', 'running', 'paused'];
+
+function successfulTickets() {
+  return state.run ? state.run.tickets.filter((ticket) => ticket.scrape_status === 'success') : [];
+}
+
+function exportSummary() {
+  const run = state.run;
+  const metadata = run?.metadata || {};
+  const tickets = run?.tickets || [];
+  const success = tickets.filter((ticket) => ticket.scrape_status === 'success').length;
+  const failed = tickets.filter((ticket) => ticket.scrape_status === 'failed').length;
+  const busy = BUSY_STATUSES.includes(state.job.status);
+  const filter = metadata.filter_name || state.selectedFilter || '';
+  let reason = '';
+  if (!run) reason = 'Belum ada hasil scraping. Jalankan scraping terlebih dahulu.';
+  else if (busy) reason = 'Scraping sedang berjalan. Export tersedia setelah selesai.';
+  else if (!success) reason = 'Belum ada tiket berhasil diproses pada hasil scraping ini.';
+  else if (failed) reason = `${failed} tiket gagal diproses dan tidak disertakan pada file export.`;
+  return { ready: Boolean(run) && !busy && success > 0, count: success, failed, total: tickets.length, filter, period: filter, scrapedAt: metadata.scraped_at || '', reason };
+}
+
+function safeName(value) {
+  return String(value || 'servicenow').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'servicenow';
+}
+
 function publicState() {
-  return { ...state.job, selectedFilter: state.selectedFilter, estimate: state.estimate, run: state.run ? { metadata: state.run.metadata, tickets: state.run.tickets } : null, connected: Boolean(state.client?.page) };
+  return { ...state.job, selectedFilter: state.selectedFilter, estimate: state.estimate, run: state.run ? { metadata: state.run.metadata, tickets: state.run.tickets } : null, connected: Boolean(state.client?.page), export: exportSummary() };
 }
 
 async function ensureClient() {
@@ -124,7 +151,7 @@ app.post('/api/scrape/:action', (req, res) => {
 app.get('/api/results', (_req, res) => res.json(state.run || { metadata: {}, tickets: [] }));
 app.get('/api/export/json', async (_req, res) => {
   if (!state.run) return res.status(404).json({ error: 'Belum ada hasil' });
-  const file = path.join(config.outputDir, `${state.selectedFilter || 'servicenow'}-result.json`); await saveRun(state.run, file); res.download(file, path.basename(file));
+  const file = path.join(config.outputDir, `${safeName(state.run.metadata?.filter_name || state.selectedFilter)}-result.json`); await saveRun(state.run, file); res.download(file, path.basename(file));
 });
 app.post('/api/upload-evidence', async (req, res) => {
   try {
@@ -137,12 +164,35 @@ app.post('/api/upload-evidence', async (req, res) => {
     res.json({ ok: true, uploaded: ticketNumbers.length });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
+function exportGuard() {
+  if (BUSY_STATUSES.includes(state.job.status)) return 'Scraping sedang berjalan. Tunggu hingga selesai sebelum melakukan export.';
+  if (!state.run) return 'Belum ada hasil scraping. Jalankan scraping terlebih dahulu.';
+  if (!successfulTickets().length) return 'Belum ada tiket berhasil diproses pada hasil scraping ini.';
+  return '';
+}
+
+function exportOverrides(tickets, defaultResult) {
+  const allowed = ['Success', 'Warning', 'Error', 'Other'];
+  const overrides = {};
+  if (!allowed.includes(defaultResult)) return overrides;
+  tickets.forEach((ticket) => {
+    const hasResult = ticket.detail_tiket?.result || ticket.report?.result;
+    if (!hasResult) overrides[ticket.nomor_tiket] = { result: defaultResult };
+  });
+  return overrides;
+}
+
 async function createPdfResponse(req, res, disposition = 'attachment') {
-  if (!state.run) return res.status(404).json({ error: 'Belum ada hasil' });
+  const blocked = exportGuard();
+  if (blocked) return res.status(BUSY_STATUSES.includes(state.job.status) ? 409 : 400).json({ error: blocked });
   const input = req.body || req.query || {};
-  const ticketNumbers = Array.isArray(input.ticketNumbers) ? input.ticketNumbers : (input.ticketNumbers ? String(input.ticketNumbers).split(',').filter(Boolean) : undefined);
-  const file = path.join(config.outputDir, `${state.selectedFilter || 'servicenow'}-report.pdf`);
-  await generatePdf(state.run, file, { ticketNumbers, period: input.period, overrides: input.overrides, screenshots: state.evidence });
+  const tickets = successfulTickets();
+  const file = path.join(config.outputDir, `${safeName(state.run.metadata?.filter_name || state.selectedFilter)}-report.pdf`);
+  await generatePdf({ ...state.run, tickets }, file, {
+    period: input.period || state.run.metadata?.filter_name,
+    overrides: exportOverrides(tickets, input.resultDefault),
+    screenshots: state.evidence
+  });
   res.setHeader('Content-Disposition', `${disposition}; filename="${path.basename(file)}"`); return res.sendFile(file);
 }
 app.post('/api/export/pdf', async (req, res) => {
@@ -151,6 +201,20 @@ app.post('/api/export/pdf', async (req, res) => {
 });
 app.post('/api/export/pdf-preview', async (req, res) => { try { await createPdfResponse(req, res, 'inline'); } catch (err) { res.status(500).json({ error: err.message }); } });
 app.get('/api/export/pdf-preview', async (req, res) => { try { await createPdfResponse(req, res, 'inline'); } catch (err) { res.status(500).json({ error: err.message }); } });
+app.get('/api/export/excel', async (req, res) => {
+  try {
+    const blocked = exportGuard();
+    if (blocked) return res.status(BUSY_STATUSES.includes(state.job.status) ? 409 : 400).json({ error: blocked });
+    const tickets = successfulTickets();
+    const file = path.join(config.outputDir, `${safeName(state.run.metadata?.filter_name || state.selectedFilter)}-report.xlsx`);
+    await generateExcel({ ...state.run, tickets }, file, {
+      tickets,
+      period: req.query.period || state.run.metadata?.filter_name,
+      defaultResult: req.query.resultDefault
+    });
+    res.download(file, path.basename(file));
+  } catch (err) { error('Ekspor Excel gagal', { message: err.message }); res.status(500).json({ error: err.message }); }
+});
 app.get('*', (_req, res) => res.sendFile(path.join(root, '..', 'public', 'index.html')));
 
 if (process.env.NO_SERVER !== 'true') app.listen(config.port, () => info(`Aplikasi berjalan di http://localhost:${config.port}`));

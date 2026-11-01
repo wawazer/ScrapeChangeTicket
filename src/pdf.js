@@ -23,6 +23,19 @@ const layout = {
   }
 };
 
+// Bottom of the printable table area on an A4 portrait page.
+const PAGE_BOTTOM = 740;
+const valueWidth = layout.table.right - layout.text.pad - layout.text.value;
+// Text rows can grow and are split across continuation pages when they no
+// longer fit. The geometry mirrors the values used by rowHeights()/drawTable().
+const textRowSpec = {
+  description: { x: layout.text.value, width: valueWidth, label: 'Description', lineHeight: layout.text.line, minHeight: layout.rows.description, padding: 10.25 },
+  cause: { x: layout.text.value + 51, width: valueWidth - 51, label: 'Cause', lineHeight: layout.text.line, minHeight: layout.rows.notice, padding: 10.25 },
+  action: { x: layout.text.value + 68, width: valueWidth - 68, label: 'Action Plan', lineHeight: layout.text.line, minHeight: layout.rows.notice, padding: 10.25 },
+  requestor: { x: layout.text.value, width: 76, label: 'Requestor', lineHeight: layout.text.labelLine, minHeight: layout.rows.requestor, padding: 0 },
+  email: { x: layout.text.detail, width: 185, label: 'Email :', lineHeight: 18, minHeight: layout.rows.location, padding: 0 }
+};
+
 const font = 'Helvetica';
 const bold = 'Helvetica-Bold';
 const checkbox = { size: 8.4, gap: 4.1, left: 0.817, top: 7.258, width: 8.416, height: 7.291, stroke: 0.3, tick: 0.95, tickTop: 1.35 };
@@ -105,43 +118,103 @@ function drawHeader(doc, group, date, logoPath) {
   doc.text(date || '-', 132.6, 94.88, { baseline: 'alphabetic', lineBreak: false });
 }
 
-function drawFooter(doc) {
+function drawFooter(doc, pageNumber = 1) {
   const { block, rule, label, number } = layout.footer;
   doc.save().rect(block.x, block.y, block.width, block.height).fill('#000000').restore();
   doc.font(font).fontSize(number.size).fillColor('#ffffff');
-  const numberWidth = doc.widthOfString('1');
-  doc.text('1', number.right - numberWidth, number.baseline, { baseline: 'alphabetic', lineBreak: false });
+  const pageLabel = String(pageNumber);
+  const numberWidth = doc.widthOfString(pageLabel);
+  doc.text(pageLabel, number.right - numberWidth, number.baseline, { baseline: 'alphabetic', lineBreak: false });
   line(doc, rule.from, rule.y, rule.to, rule.y, 1.25);
   doc.font(font).fontSize(label.size).fillColor(label.color);
   const labelWidth = doc.widthOfString('Laporan Patch Release');
   doc.text('Laporan Patch Release', label.right - labelWidth, label.baseline, { baseline: 'alphabetic', lineBreak: false });
 }
 
-function rowHeights(doc, data) {
-  const valueWidth = layout.table.right - layout.text.pad - layout.text.value;
-  const requestorWidth = 76;
+function describeRows(doc, data) {
   const ipWidth = layout.columns.detail - layout.text.pad - layout.text.split;
-  const emailWidth = 185;
-  const requestorLines = wrap(doc, display(data.requestor), requestorWidth).length;
-  const emailLines = wrap(doc, display(data.email), emailWidth).length;
-  const ipLines = wrap(doc, 'IP Address Server', ipWidth).length;
-  const descriptionLines = wrap(doc, display(data.description), valueWidth).length;
-  const causeLines = wrap(doc, display(data.cause), valueWidth - 51).length;
-  const actionLines = wrap(doc, display(data.action_plan), valueWidth - 68).length;
+  const requestorLines = wrap(doc, display(data.requestor), textRowSpec.requestor.width);
+  const emailLines = wrap(doc, display(data.email), textRowSpec.email.width);
+  const ipLines = wrap(doc, 'IP Address Server', ipWidth);
+  const descriptionLines = wrap(doc, display(data.description), textRowSpec.description.width);
+  const causeLines = wrap(doc, display(data.cause), textRowSpec.cause.width);
+  const actionLines = wrap(doc, display(data.action_plan), textRowSpec.action.width);
   return {
-    date: layout.rows.date,
-    ticket: layout.rows.ticket,
-    requestor: Math.max(layout.rows.requestor, Math.ceil(Math.max(1, requestorLines) * layout.text.labelLine)),
-    contact: Math.max(layout.rows.location, Math.max(1, emailLines) * 18),
-    location: layout.rows.location,
-    application: layout.rows.application,
-    change: Math.max(layout.rows.location, Math.ceil(Math.max(1, ipLines) * layout.text.labelLine)) + layout.rows.location * 2,
-    pic: layout.rows.pic,
-    description: Math.max(layout.rows.description, Math.ceil(descriptionLines * layout.text.line + 10.25)),
-    result: layout.rows.result,
-    cause: Math.max(layout.rows.notice, Math.ceil(causeLines * layout.text.line + 10.25)),
-    action: Math.max(layout.rows.notice, Math.ceil(actionLines * layout.text.line + 10.25))
+    heights: {
+      date: layout.rows.date,
+      ticket: layout.rows.ticket,
+      requestor: Math.max(layout.rows.requestor, Math.ceil(Math.max(1, requestorLines.length) * layout.text.labelLine)),
+      contact: Math.max(layout.rows.location, Math.max(1, emailLines.length) * 18),
+      location: layout.rows.location,
+      application: layout.rows.application,
+      change: Math.max(layout.rows.location, Math.ceil(Math.max(1, ipLines.length) * layout.text.labelLine)) + layout.rows.location * 2,
+      pic: layout.rows.pic,
+      description: Math.max(layout.rows.description, Math.ceil(descriptionLines.length * layout.text.line + 10.25)),
+      result: layout.rows.result,
+      cause: Math.max(layout.rows.notice, Math.ceil(causeLines.length * layout.text.line + 10.25)),
+      action: Math.max(layout.rows.notice, Math.ceil(actionLines.length * layout.text.line + 10.25))
+    },
+    lines: { requestor: requestorLines, email: emailLines, description: descriptionLines, cause: causeLines, action: actionLines }
   };
+}
+
+const rowOrder = ['date', 'ticket', 'requestor', 'contact', 'location', 'application', 'change', 'pic', 'description', 'result', 'cause', 'action'];
+
+function buildRows(heights, lines) {
+  return rowOrder.map((name) => ({
+    row: name,
+    height: heights[name],
+    text: name === 'contact' ? 'email' : (textRowSpec[name] ? name : null),
+    lines: name === 'contact' ? lines.email : lines[name]
+  }));
+}
+
+// Splits the table into printable pages. Text rows (description, cause, action,
+// requestor and email) are cut at line boundaries so nothing is truncated and a
+// single ticket can continue on additional pages with the same table design.
+function paginateRows(rows, firstTop) {
+  const pages = [];
+  let page = [];
+  let used = 0;
+  let available = PAGE_BOTTOM - firstTop;
+  const nextPage = () => {
+    if (page.length) pages.push(page);
+    page = []; used = 0; available = PAGE_BOTTOM - layout.table.top;
+  };
+  for (const row of rows) {
+    if (!row.lines) {
+      if (page.length && used + row.height > available) nextPage();
+      page.push({ ...row, first: true, last: true });
+      used += row.height;
+      continue;
+    }
+    const spec = textRowSpec[row.text];
+    let offset = 0;
+    while (offset < row.lines.length) {
+      const room = available - used - spec.padding;
+      let maxLines = Math.floor(room / spec.lineHeight);
+      if (maxLines < 1) {
+        if (page.length) { nextPage(); continue; }
+        maxLines = 1;
+      }
+      const take = Math.min(maxLines, row.lines.length - offset);
+      const chunk = row.lines.slice(offset, offset + take);
+      const height = Math.max(spec.minHeight, Math.ceil(take * spec.lineHeight + spec.padding));
+      page.push({ ...row, height, lines: chunk, first: offset === 0, last: offset + take >= row.lines.length });
+      used += height;
+      offset += take;
+      if (offset < row.lines.length) nextPage();
+    }
+  }
+  if (page.length) pages.push(page);
+  return pages;
+}
+
+function drawLines(doc, lines, x, baseline, lineHeight, options = {}) {
+  doc.font(options.bold ? bold : font).fontSize(options.size || layout.text.size).fillColor(options.color || '#000000');
+  lines.forEach((content, index) => {
+    doc.text(content, x, baseline + index * lineHeight, { baseline: 'alphabetic', lineBreak: false });
+  });
 }
 
 function drawTicketType(doc, data, y, number, detail) {
@@ -193,76 +266,94 @@ function drawResult(doc, data, y, height, evidencePath) {
   }
 }
 
-function drawTable(doc, data, ticket, evidencePath, tableTop) {
+function drawTablePage(doc, data, ticket, evidencePath, tableTop, segments) {
   const x0 = layout.table.left;
   const x1 = layout.columns.label;
   const x2 = layout.columns.split;
   const x3 = layout.columns.detail;
   const x4 = layout.table.right;
-  const top = tableTop;
-  const heights = rowHeights(doc, data);
-  const order = ['date', 'ticket', 'requestor', 'contact', 'location', 'application', 'change', 'pic', 'description', 'result', 'cause', 'action'];
-  const y = {};
-  let cursor = top;
-  for (const name of order) { y[name] = cursor; cursor += heights[name]; }
+  const tops = [];
+  let cursor = tableTop;
+  for (const segment of segments) { tops.push(cursor); cursor += segment.height; }
   const bottom = cursor;
-  if (bottom > 740) throw new Error(`Isi tiket ${ticket.nomor_tiket} terlalu panjang untuk satu halaman laporan`);
 
   doc.save().lineWidth(borderWidth).strokeColor('#000000');
-  doc.rect(x0 + borderOffset, top + borderOffset, x4 - x0, bottom - top).stroke();
-  for (const name of order.slice(1)) line(doc, x0, y[name], x4, y[name], borderWidth, borderOffset);
-  line(doc, x1, top, x1, bottom, borderWidth, borderOffset);
-  for (const name of ['requestor', 'contact', 'change']) {
-    line(doc, x2, y[name], x2, y[name] + heights[name], borderWidth, borderOffset);
-    line(doc, x3, y[name], x3, y[name] + heights[name], borderWidth, borderOffset);
-  }
-  line(doc, x2, y.result, x2, y.result + heights.result, borderWidth, borderOffset);
+  doc.rect(x0 + borderOffset, tableTop + borderOffset, x4 - x0, bottom - tableTop).stroke();
+  segments.forEach((segment, index) => {
+    if (index) line(doc, x0, tops[index], x4, tops[index], borderWidth, borderOffset);
+    if (['requestor', 'contact', 'change', 'result'].includes(segment.row)) line(doc, x2, tops[index], x2, tops[index] + segment.height, borderWidth, borderOffset);
+    if (['requestor', 'contact', 'change'].includes(segment.row)) line(doc, x3, tops[index], x3, tops[index] + segment.height, borderWidth, borderOffset);
+  });
+  line(doc, x1, tableTop, x1, bottom, borderWidth, borderOffset);
   doc.restore();
 
   const labelWidth = x1 - layout.text.pad - layout.text.left;
-  const valueWidth = x4 - layout.text.pad - layout.text.value;
+  const fullValueWidth = x4 - layout.text.pad - layout.text.value;
   const splitWidth = x2 - layout.text.pad - layout.text.value;
-  const requestorWidth = 76;
-  const emailWidth = 185;
 
-  text(doc, 'Date', layout.text.left, y.date + 10.25, labelWidth);
-  text(doc, display(data.date), layout.text.value, y.date + 10.25, valueWidth);
-
-  text(doc, 'Ticket\nNumber', layout.text.left, y.ticket + (heights.ticket - 34.5) / 2 + 9.9, labelWidth, { lineHeight: layout.text.labelLine });
-  drawTicketType(doc, data, y.ticket, ticket.nomor_tiket, ticket.detail_tiket);
-
-  text(doc, 'Requestor', layout.text.left, y.requestor + (heights.requestor - layout.text.labelLine) / 2 + 9.9, labelWidth);
-  text(doc, display(data.requestor), layout.text.value, y.requestor + 10.25, requestorWidth, { lineHeight: layout.text.labelLine });
-  text(doc, 'NIPP/NRK', layout.text.split, y.requestor + 10.25, x3 - layout.text.split - layout.text.pad);
-  text(doc, display(data.nipp_nrk), layout.text.detail, y.requestor + 10.25, valueWidth);
-
-  text(doc, 'Contact', layout.text.left, y.contact + (heights.contact - layout.text.labelLine) / 2 + 9.9, labelWidth);
-  text(doc, display(data.contact), layout.text.value, y.contact + 10.7, splitWidth);
-  text(doc, 'Email :', layout.text.split, y.contact + 10.7, x3 - layout.text.split - layout.text.pad);
-  text(doc, display(data.email), layout.text.detail, y.contact + 10.7, emailWidth);
-
-  text(doc, 'Location', layout.text.left, y.location + 10.25, labelWidth);
-  text(doc, display(data.location), layout.text.value, y.location + 10.25, valueWidth);
-  text(doc, 'Aplication', layout.text.left, y.application + 10.25, labelWidth);
-  text(doc, display(data.application), layout.text.value, y.application + 10.25, valueWidth);
-
-  text(doc, 'Change', layout.text.left, y.change + (heights.change - layout.text.labelLine) / 2 + 9.9, labelWidth);
-  drawChange(doc, data, y.change, heights.change);
-
-  text(doc, 'PIC', layout.text.left, y.pic + 10.25, labelWidth);
-  text(doc, display(data.pic), layout.text.value, y.pic + 10.25, valueWidth);
-  text(doc, 'Description', layout.text.left, y.description + 10.1, labelWidth, { lineHeight: layout.text.labelLine });
-  text(doc, display(data.description), layout.text.value, y.description + 10.25, valueWidth);
-
-  text(doc, 'Result', layout.text.left, y.result + (heights.result - layout.text.labelLine) / 2 + 9.9, labelWidth);
-  drawResult(doc, data, y.result, heights.result, evidencePath);
-
-  const noticeHeight = heights.cause + heights.action;
-  text(doc, 'If warning\n/ Error', layout.text.left, y.cause + (noticeHeight - 34.5) / 2 + 9.9, labelWidth, { lineHeight: layout.text.labelLine });
-  text(doc, 'Cause', layout.text.value, y.cause + 10.25, x4 - layout.text.value - layout.text.pad);
-  text(doc, display(data.cause), layout.text.value + 51, y.cause + 10.25, x4 - layout.text.value - layout.text.pad - 51);
-  text(doc, 'Action Plan', layout.text.value, y.action + 10.25, x4 - layout.text.value - layout.text.pad);
-  text(doc, display(data.action_plan), layout.text.value + 68, y.action + 10.25, x4 - layout.text.value - layout.text.pad - 68);
+  segments.forEach((segment, index) => {
+    const y = tops[index];
+    const height = segment.height;
+    switch (segment.row) {
+      case 'date':
+        text(doc, 'Date', layout.text.left, y + 10.25, labelWidth);
+        text(doc, display(data.date), layout.text.value, y + 10.25, fullValueWidth);
+        break;
+      case 'ticket':
+        text(doc, 'Ticket\nNumber', layout.text.left, y + (height - 34.5) / 2 + 9.9, labelWidth, { lineHeight: layout.text.labelLine });
+        drawTicketType(doc, data, y, ticket.nomor_tiket, ticket.detail_tiket);
+        break;
+      case 'requestor':
+        text(doc, segment.first ? 'Requestor' : 'Requestor\n(lanjutan)', layout.text.left, y + (height - layout.text.labelLine) / 2 + 9.9, labelWidth, { lineHeight: layout.text.labelLine });
+        drawLines(doc, segment.lines, layout.text.value, y + 10.25, layout.text.labelLine);
+        if (segment.first) {
+          text(doc, 'NIPP/NRK', layout.text.split, y + 10.25, x3 - layout.text.split - layout.text.pad);
+          text(doc, display(data.nipp_nrk), layout.text.detail, y + 10.25, fullValueWidth);
+        }
+        break;
+      case 'contact':
+        text(doc, segment.first ? 'Contact' : 'Contact\n(lanjutan)', layout.text.left, y + (height - layout.text.labelLine) / 2 + 9.9, labelWidth, { lineHeight: layout.text.labelLine });
+        if (segment.first) text(doc, display(data.contact), layout.text.value, y + 10.7, splitWidth);
+        text(doc, 'Email :', layout.text.split, y + 10.7, x3 - layout.text.split - layout.text.pad);
+        drawLines(doc, segment.lines, layout.text.detail, y + 10.7, 18);
+        break;
+      case 'location':
+        text(doc, 'Location', layout.text.left, y + 10.25, labelWidth);
+        text(doc, display(data.location), layout.text.value, y + 10.25, fullValueWidth);
+        break;
+      case 'application':
+        text(doc, 'Aplication', layout.text.left, y + 10.25, labelWidth);
+        text(doc, display(data.application), layout.text.value, y + 10.25, fullValueWidth);
+        break;
+      case 'change':
+        text(doc, 'Change', layout.text.left, y + (height - layout.text.labelLine) / 2 + 9.9, labelWidth);
+        drawChange(doc, data, y, height);
+        break;
+      case 'pic':
+        text(doc, 'PIC', layout.text.left, y + 10.25, labelWidth);
+        text(doc, display(data.pic), layout.text.value, y + 10.25, fullValueWidth);
+        break;
+      case 'description':
+        text(doc, segment.first ? 'Description' : 'Description\n(lanjutan)', layout.text.left, y + 10.1, labelWidth, { lineHeight: layout.text.labelLine });
+        drawLines(doc, segment.lines, layout.text.value, y + 10.25, layout.text.line);
+        break;
+      case 'result':
+        text(doc, 'Result', layout.text.left, y + (height - layout.text.labelLine) / 2 + 9.9, labelWidth);
+        drawResult(doc, data, y, height, evidencePath);
+        break;
+      case 'cause':
+        if (segment.first) text(doc, 'If warning\n/ Error', layout.text.left, y + (height - 34.5) / 2 + 9.9, labelWidth, { lineHeight: layout.text.labelLine });
+        text(doc, 'Cause', layout.text.value, y + 10.25, x4 - layout.text.value - layout.text.pad);
+        drawLines(doc, segment.lines, layout.text.value + 51, y + 10.25, layout.text.line);
+        break;
+      case 'action':
+        text(doc, 'Action Plan', layout.text.value, y + 10.25, x4 - layout.text.value - layout.text.pad);
+        drawLines(doc, segment.lines, layout.text.value + 68, y + 10.25, layout.text.line);
+        break;
+      default:
+        break;
+    }
+  });
 }
 
 export async function generatePdf(run, outputPath, options = {}) {
@@ -279,20 +370,29 @@ export async function generatePdf(run, outputPath, options = {}) {
     const period = options.period || run.metadata.filter_name || '-';
     let lastDate = null;
     let groupCount = 0;
+    let pageNumber = 0;
     if (!selected.length) {
+      pageNumber += 1;
       drawHeader(doc, '', period, logoPath);
-      drawFooter(doc);
+      drawFooter(doc, pageNumber);
       text(doc, 'Tidak ada tiket untuk dilaporkan.', 90.6, 145, 433, 20);
     }
-    selected.forEach((ticket, index) => {
-      if (index) doc.addPage([layout.page.width, layout.page.height], { margin: 0 });
+    selected.forEach((ticket) => {
       const data = reportTicket(ticket, options.overrides?.[ticket.nomor_tiket]);
       const date = display(data.date) || period;
       const firstOfGroup = date !== lastDate;
       if (firstOfGroup) { groupCount += 1; lastDate = date; }
-      drawHeader(doc, firstOfGroup ? `1.${groupCount}` : '', date, logoPath);
-      drawFooter(doc);
-      drawTable(doc, data, ticket, options.screenshots?.[ticket.nomor_tiket], firstOfGroup ? layout.table.topWithHeading : layout.table.top);
+      const firstTop = firstOfGroup ? layout.table.topWithHeading : layout.table.top;
+      const { heights, lines } = describeRows(doc, data);
+      const pages = paginateRows(buildRows(heights, lines), firstTop);
+      pages.forEach((segments, pageIndex) => {
+        if (pageNumber) doc.addPage([layout.page.width, layout.page.height], { margin: 0 });
+        pageNumber += 1;
+        drawHeader(doc, pageIndex === 0 && firstOfGroup ? `1.${groupCount}` : '', date, logoPath);
+        drawFooter(doc, pageNumber);
+        if (pageIndex > 0) text(doc, `Lanjutan tiket ${ticket.nomor_tiket} (${pageIndex + 1}/${pages.length})`, layout.table.left, 55, 400, { size: 9 });
+        drawTablePage(doc, data, ticket, options.screenshots?.[ticket.nomor_tiket], pageIndex === 0 ? firstTop : layout.table.top, segments);
+      });
     });
     doc.end();
   });
