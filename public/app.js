@@ -40,7 +40,7 @@ function announce(message, level = 'info') {
 
 function showView(view) {
   activeView = view;
-  const names = { dashboard: 'Dashboard', scrape: 'Scraping tickets', history: 'Riwayat scraping', tickets: 'Data tickets', reports: 'Export reports' };
+  const names = { dashboard: 'Dashboard', scrape: 'Scraping tickets', history: 'Riwayat scraping', tickets: 'Data tickets', reports: 'Export reports', settings: 'Settings' };
   $$('.view').forEach((section) => {
     const visible = section.dataset.view === view;
     section.hidden = !visible;
@@ -114,11 +114,49 @@ function render(state) {
   ['#dashboardJobStatus', '#jobStatus'].forEach((selector) => { const element = $(selector); if (element) { element.textContent = statusLabel(job.status); element.className = `status-badge ${statusClass(job.status)}`; } });
   ['#progressBar', '#progressBarRun'].forEach((selector) => { const bar = $(selector); if (bar) bar.style.transform = `scaleX(${percent / 100})`; });
   renderActivity(job);
+  renderAnalytics(total, processed, success, failed, pending, percent);
   setText('#logs', (job.logs || []).map((entry) => `[${new Date(entry.at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}] ${entry.message}`).join('\n') || 'Belum ada log.');
   renderTickets();
   renderExport(state);
   renderHistory();
   if (state.run) saveHistory(state.run, job);
+}
+
+function renderAnalytics(total, processed, success, failed, pending, percent) {
+  const successPct = total > 0 ? Math.round((success / total) * 100) : 0;
+  const failedPct = total > 0 ? Math.round((failed / total) * 100) : 0;
+  const pendingPct = total > 0 ? Math.max(0, 100 - successPct - failedPct) : 100;
+
+  const barSuccess = $('#distSuccess');
+  const barFailed = $('#distFailed');
+  const barPending = $('#distPending');
+  if (barSuccess) barSuccess.style.width = `${successPct}%`;
+  if (barFailed) barFailed.style.width = `${failedPct}%`;
+  if (barPending) barPending.style.width = `${total > 0 ? pendingPct : 100}%`;
+
+  setText('#distributionRate', `${percent}% Selesai`);
+  setText('#legendSuccess', success.toLocaleString('id-ID'));
+  setText('#legendFailed', failed.toLocaleString('id-ID'));
+  setText('#legendPending', (total > 0 ? pending : 0).toLocaleString('id-ID'));
+
+  const trendContainer = $('#trendBars');
+  if (trendContainer) {
+    const history = JSON.parse(localStorage.getItem('scrape-history') || '[]');
+    if (history.length) {
+      const recent = history.slice(0, 8).reverse();
+      const maxTickets = Math.max(...recent.map((item) => item.total || item.processed || 1), 1);
+      trendContainer.innerHTML = recent.map((item) => {
+        const count = item.total || item.processed || 0;
+        const heightPct = Math.max(12, Math.round((count / maxTickets) * 100));
+        const successRate = count > 0 ? Math.round(((item.success || 0) / count) * 100) : 0;
+        const barClass = (item.failed || 0) > 0 ? 'trend-bar-warn' : 'trend-bar-success';
+        const dateStr = item.at ? new Date(item.at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '-';
+        return `<div class="trend-col" title="${escapeHtml(item.filter || 'Run')}: ${count} tiket (${successRate}% berhasil)"><div class="trend-bar-track"><div class="trend-bar-fill ${barClass}" style="height: ${heightPct}%"></div></div><span class="trend-label">${escapeHtml(dateStr)}</span></div>`;
+      }).join('');
+    } else {
+      trendContainer.innerHTML = '<p class="empty-copy">Belum ada data riwayat untuk menampilkan grafik tren.</p>';
+    }
+  }
 }
 
 function tableValue(ticket, key, fallback = 'Belum tersedia') {

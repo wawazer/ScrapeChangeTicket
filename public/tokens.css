@@ -1,23 +1,121 @@
 :root {
-  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
-  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.2rem; --text-xl: 1.44rem; --text-2xl: 1.728rem; --text-3xl: 2.074rem;
-  --text-display-s: 1.44rem; --text-display: 1.728rem; --text-section: 1.2rem; --text-title: 1rem; --text-lead: 1rem;
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
-  --color-error: oklch(52% 0.19 27); --color-success: oklch(50% 0.12 150);
-  --container: 1440px; --gutter: 64px; --gap-columns: 32px; --section-gap-s: 120px; --section-gap: 144px; --section-gap-l: 176px;
-  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
-  --color-paper: oklch(99% 0.006 240); --color-paper-2: oklch(96% 0.014 240); --color-paper-3: oklch(92% 0.02 240);
-  --color-ink: oklch(20% 0.045 245); --color-ink-2: oklch(37% 0.035 245); --color-muted: oklch(53% 0.025 245);
-  --color-rule: oklch(87% 0.022 240);
-  --color-accent: oklch(52% 0.18 245); --color-accent-ink: oklch(98% 0.01 245); --color-focus: oklch(57% 0.19 245);
-  --color-transparent: oklch(0% 0 0 / 0); --color-shadow: oklch(24% 0.035 240 / 0.06); --color-dialog-shadow: oklch(24% 0.035 240 / 0.18); --color-backdrop: oklch(24% 0.035 240 / 0.42);
-  --color-sidebar-muted: oklch(86% 0.025 240); --color-sidebar-label: oklch(72% 0.03 240); --color-sidebar-text: oklch(89% 0.018 240); --color-sidebar-hover: oklch(31% 0.055 245); --color-sidebar-rule: oklch(39% 0.045 245); --color-offline: oklch(65% 0.02 240);
-  --color-success-rule: oklch(72% 0.09 150); --color-success-surface: oklch(96% 0.025 150); --color-success-ink: oklch(37% 0.1 150);
-  --color-danger-rule: oklch(73% 0.1 28); --color-danger-surface: oklch(97% 0.025 28); --color-danger-ink: oklch(42% 0.12 28); --color-danger-text: oklch(48% 0.15 28); --color-danger-button-rule: oklch(65% 0.13 28); --color-danger-button-ink: oklch(40% 0.13 28);
-  --color-warning-rule: oklch(77% 0.08 78); --color-warning-surface: oklch(97% 0.03 78); --color-warning-ink: oklch(42% 0.1 78); --color-warning-marker: oklch(62% 0.13 78); --color-warning-note: oklch(48% 0.1 78);
-  --color-info-rule: oklch(73% 0.1 245); --color-info-surface: oklch(96% 0.025 245); --color-info-ink: oklch(38% 0.12 245);
-  --font-display: "Segoe UI", ui-sans-serif, system-ui, sans-serif; --font-body: "Segoe UI", ui-sans-serif, system-ui, sans-serif; --font-outlier: var(--font-body);
-  --radius-card: 4px; --radius-pill: 999px; --rule-hair: 1px; --shadow-card: none;
-  --tracking-display: -0.02em;
+  /* Spacing Scale (8pt grid system) */
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+
+  /* Typography Ramp */
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: "Cascadia Code", "Consolas", "Courier New", monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+
+  /* Premium Dark Theme Color System (OKLCH) */
+  --color-paper: oklch(12% 0.015 240);          /* #0A0C10 Near-black charcoal */
+  --color-paper-2: oklch(14% 0.018 235);        /* #0E1116 Main workspace background */
+  --color-paper-3: oklch(17% 0.02 230);         /* #13171D Recessed areas, progress tracks */
+  --color-surface: oklch(16.5% 0.022 215);      /* #11151A Panel base surface */
+  --color-surface-elevated: oklch(20% 0.025 215);/* #192027 Elevated cards, modals */
+  --color-surface-hover: oklch(22% 0.028 215);   /* #1D242D Hover table rows & buttons */
+  --color-surface-recessed: oklch(13% 0.018 220);/* #0D1014 Input fields & code blocks */
+
+  --color-rule: oklch(25% 0.022 220);           /* #222B34 Crisp 1px perimeter/dividers */
+  --color-rule-subtle: oklch(20% 0.018 220);    /* #1B2229 Secondary divider lines */
+  --color-rule-active: oklch(40% 0.06 135);     /* Active element border highlight */
+
+  /* Typography Contrast Palette */
+  --color-ink: oklch(96% 0.005 240);            /* #F0F3F7 High contrast display & titles */
+  --color-ink-2: oklch(84% 0.015 240);          /* #CBD3DD Primary readable body text */
+  --color-muted: oklch(62% 0.02 240);           /* #8C98A6 Secondary labels and breadcrumbs */
+
+  /* Primary Accent: Vibrant Lime Green */
+  --color-accent: oklch(82% 0.21 135);          /* #7EE732 Vibrant Lime Green */
+  --color-accent-hover: oklch(88% 0.22 135);    /* #97F255 Lighter lime hover */
+  --color-accent-active: oklch(76% 0.20 135);   /* #6BD625 Active lime press */
+  --color-accent-ink: oklch(12% 0.04 135);      /* #061603 Dark contrasting text on lime */
+  --color-accent-subtle: oklch(22% 0.06 135);   /* #1A2E12 Subtle dark-lime tint */
+  --color-accent-border: oklch(35% 0.09 135);   /* #2D4D1F Lime outline */
+  --color-focus: oklch(82% 0.21 135);           /* Lime focus ring */
+
+  /* Secondary Accent: Emerald & Teal */
+  --color-teal: oklch(68% 0.16 175);            /* #10B981 Emerald / Teal */
+  --color-teal-subtle: oklch(22% 0.05 175);     /* #102B24 Dark teal tint */
+  --color-teal-border: oklch(36% 0.08 175);     /* #1A473C Teal border */
+
+  /* Semantic Status Colors */
+  --color-success: oklch(76% 0.18 145);         /* Vibrant readable green */
+  --color-success-surface: oklch(20% 0.04 150);
+  --color-success-rule: oklch(32% 0.08 150);
+  --color-success-ink: oklch(84% 0.16 145);
+
+  --color-warning: oklch(80% 0.15 75);          /* Amber */
+  --color-warning-surface: oklch(22% 0.05 75);
+  --color-warning-rule: oklch(35% 0.09 75);
+  --color-warning-ink: oklch(84% 0.14 75);
+  --color-warning-marker: oklch(78% 0.16 75);
+  --color-warning-note: oklch(80% 0.14 75);
+
+  --color-danger: oklch(72% 0.18 25);           /* Restrained red */
+  --color-danger-surface: oklch(20% 0.06 25);
+  --color-danger-rule: oklch(34% 0.10 25);
+  --color-danger-ink: oklch(82% 0.16 25);
+  --color-danger-button-rule: oklch(40% 0.12 25);
+  --color-danger-button-ink: oklch(80% 0.16 25);
+
+  --color-info: oklch(74% 0.16 245);            /* Cyan / Blue info */
+  --color-info-surface: oklch(20% 0.05 245);
+  --color-info-rule: oklch(34% 0.09 245);
+  --color-info-ink: oklch(82% 0.15 245);
+
+  /* Sidebar Tokens (Deep Navy-Black) */
+  --color-sidebar-bg: oklch(10% 0.02 245);      /* #06080B Deep navy-black */
+  --color-sidebar-border: oklch(18% 0.02 240);  /* #151A20 Sidebar perimeter border */
+  --color-sidebar-text: oklch(80% 0.015 240);
+  --color-sidebar-label: oklch(50% 0.02 240);
+  --color-sidebar-muted: oklch(45% 0.02 240);
+  --color-sidebar-hover: oklch(16% 0.025 215);
+  --color-sidebar-active: oklch(82% 0.21 135);
+  --color-sidebar-active-bg: oklch(18% 0.05 135);
+  --color-offline: oklch(45% 0.02 240);
+
+  /* Shadows & Overlays */
+  --shadow-sm: 0 1px 2px oklch(5% 0.01 240 / 0.5);
+  --shadow-card: 0 2px 4px oklch(5% 0.01 240 / 0.4), 0 1px 2px oklch(5% 0.01 240 / 0.3);
+  --shadow-elevated: 0 6px 12px -2px oklch(5% 0.01 240 / 0.6), 0 3px 6px -3px oklch(5% 0.01 240 / 0.4);
+  --shadow-dialog: 0 20px 48px -4px oklch(0% 0 0 / 0.85);
+  --color-backdrop: oklch(0% 0 0 / 0.75);
+
+  /* Shape & Controls */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-card: 8px;
+  --radius-input: 6px;
+  --radius-pill: 9999px;
+  --control-height: 38px;
+  --sidebar-width: 250px;
+
+  /* Durations & Easing (Restrained Motion) */
+  --dur-fast: 120ms;
+  --dur-normal: 180ms;
+  --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Z-Index Hierarchy */
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 50;
+  --z-sticky: 100;
+  --z-modal: 200;
+  --z-skip: 300;
 }
