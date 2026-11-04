@@ -159,3 +159,77 @@ test('export endpoints refuse before scraping, during scraping and use only the 
     config.outputDir = previousOutput;
   }
 });
+
+test('scraping merges parent Change Request fields into the saved CTASK detail', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pelindo-chg-'));
+  const previousOutput = config.outputDir;
+  const previousNoServer = process.env.NO_SERVER;
+  config.outputDir = directory;
+  process.env.NO_SERVER = 'true';
+  const { state, runScrape } = await import('../../src/server.js');
+  state.client = {
+    async launch() {},
+    async readAllTickets() {
+      return { tickets: [{ nomor_tiket: 'CTASK0016980', values: { change_request: 'CHG0004562' } }] };
+    },
+    async scrapeDetail() {
+      return { detail: { change_request: '' }, activities: [], activities_status: 'success', activities_error: null };
+    },
+    async scrapeChangeRequest(number) {
+      assert.equal(number, 'CHG0004562');
+      return { picRequester: 'CHG requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering' };
+    },
+    async restoreList() {}
+  };
+  state.selectedFilter = 'CTASK CHG test';
+  state.job = { status: 'idle', current: '', message: '', processed: 0, total: 0, logs: [] };
+  try {
+    await runScrape();
+    const detail = state.run.tickets[0].detail_tiket;
+    assert.equal(detail.requestor, 'CHG requester');
+    assert.equal(detail.location, 'Kantor Pusat');
+    assert.equal(detail.application, 'Service Offering');
+    assert.equal(detail.nipp_nrk, '-');
+    assert.equal(detail.contact, '-');
+    assert.equal(detail.email, '-');
+    assert.deepEqual(detail.change_data, { picRequester: 'CHG requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering' });
+  } finally {
+    state.client = null;
+    state.run = null;
+    state.runFile = '';
+    config.outputDir = previousOutput;
+    if (previousNoServer === undefined) delete process.env.NO_SERVER;
+    else process.env.NO_SERVER = previousNoServer;
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('PDF and Excel exports display Change Request fields and dash fallbacks', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pelindo-chg-export-'));
+  try {
+    const run = createRun('CTASK CHG test');
+    upsertTicket(run, ticket('CTASK0016981', {
+      requestor: '', location: '', application: '',
+      nipp_nrk: '', contact: '', email: '',
+      change_data: { picRequester: 'CHG requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering' }
+    }));
+
+    const excelPath = path.join(directory, 'chg.xlsx');
+    await generateExcel(run, excelPath);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(excelPath);
+    const row = workbook.getWorksheet('Patch Release').getRow(2);
+    assert.deepEqual([13, 14, 15, 16, 17, 18].map((column) => row.getCell(column).value), [
+      'CHG requester', '-', '-', '-', 'Kantor Pusat', 'Service Offering'
+    ]);
+
+    const pdfPath = path.join(directory, 'chg.pdf');
+    await generatePdf(run, pdfPath);
+    const text = (await pdfText(pdfPath)).pages.join(' ');
+    assert.match(text, /CHG requester/);
+    assert.match(text, /Kantor Pusat/);
+    assert.match(text, /Service Offering/);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});

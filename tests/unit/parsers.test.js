@@ -70,6 +70,24 @@ test('prefers display values over sys_id values in report mapping', () => {
   assert.equal(isSysId('b960642693634710cbd5f6fa2bba1075'), true);
 });
 
+test('prefers Change Request values when preparing report fields', () => {
+  const report = reportTicket({
+    nomor_tiket: 'CTASK0002',
+    data_tabel: { requestor: 'CTASK requester', location: 'CTASK location', application: 'CTASK app' },
+    detail_tiket: {
+      change_data: { picRequester: 'CHG requester', entity: 'CHG entity', serviceOffering: 'CHG offering' },
+      requestor: 'CHG requester', location: 'CHG entity', application: 'CHG offering',
+      nipp_nrk: '-', contact: '-', email: '-'
+    }
+  });
+  assert.equal(report.requestor, 'CHG requester');
+  assert.equal(report.location, 'CHG entity');
+  assert.equal(report.application, 'CHG offering');
+  assert.equal(report.nipp_nrk, '-');
+  assert.equal(report.contact, '-');
+  assert.equal(report.email, '-');
+});
+
 test('converts a ServiceNow state code using the selected option label', () => {
   const detail = parseDetailFields({ fields: { status: { value: '3', text: '3' } }, statusOptions: { '3': 'Closed' } });
   assert.deepEqual(detail.status, { kode: '3', nama: 'Closed' });

@@ -6,9 +6,10 @@ import { ServiceNowClient } from '../../src/servicenow.js';
 async function withMock(html, run, options = {}) {
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage();
+    const context = await browser.newContext();
+    const page = await context.newPage();
     const client = new ServiceNowClient({ baseUrl: 'http://mock.local', loginUrl: 'http://mock.local/login', headless: true, ...options });
-    client.browser = browser; client.page = page;
+    client.browser = browser; client.context = context; client.page = page;
     await page.setContent('<!doctype html><body><iframe name="gsft_main"></iframe></body>');
     const frame = page.frames().find((item) => item.name() === 'gsft_main');
     await frame.setContent(html);
@@ -89,4 +90,35 @@ test('mock ServiceNow stops when the pager does not change the page', async () =
     assert.equal(all.pages, 1);
     assert.deepEqual(all.tickets.map((ticket) => ticket.nomor_tiket), ['CTASK0016976']);
   }, { pageChangeTimeout: 400 });
+});
+
+test('mock ServiceNow scrapes and caches Change Request data without changing the CTASK page', async () => {
+  await withMock('<!doctype html><body>CTASK page</body>', async ({ client }) => {
+    const context = client.page.context();
+    const originalUrl = client.page.url();
+    let listRequests = 0;
+    await context.route('**/change_request_list.do?*', async (route) => {
+      listRequests += 1;
+      await route.fulfill({
+        contentType: 'text/html',
+        body: '<!doctype html><iframe name="gsft_main"></iframe><script>document.querySelector("iframe").srcdoc = \'<a href="/change_request.do?sys_id=1">CHG0004562</a>\'</script>'
+      });
+    });
+    await context.route('**/change_request.do?*', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><form>
+        <input id="sys_display.change_request.u_pic_requester" value="CHG Requester">
+        <select id="change_request.u_entity"><option value="1" selected>Kantor Pusat</option></select>
+        <input name="sys_display.change_request.service_offering" value="Service Offering">
+      </form>`
+    }));
+
+    const data = await client.scrapeChangeRequest('CHG0004562');
+    assert.deepEqual(data, { picRequester: 'CHG Requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering' });
+    assert.equal(client.page.url(), originalUrl);
+
+    assert.deepEqual(await client.scrapeChangeRequest('chg0004562'), data);
+    assert.equal(listRequests, 1);
+    assert.equal(client.page.url(), originalUrl);
+  });
 });

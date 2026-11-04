@@ -82,6 +82,7 @@ async function runScrape({ limit = 0, includeScreenshot = false } = {}) {
     const item = state.run.tickets.find((ticket) => ticket.nomor_tiket === row.nomor_tiket);
     try {
       const result = await client.scrapeDetail(row);
+      let detail = result.detail;
       let screenshot = null;
       if (includeScreenshot) {
         const screenshotPath = path.join(config.outputDir, 'evidence', `${row.nomor_tiket}.png`);
@@ -90,9 +91,29 @@ async function runScrape({ limit = 0, includeScreenshot = false } = {}) {
         screenshot = screenshotPath;
         if (screenshot) state.evidence[row.nomor_tiket] = screenshot;
       }
-      const validation = validateTicketData({ ...item, detail_tiket: result.detail });
+      const changeNumber = [row.values?.change_request, result.detail.change_request]
+        .find((value) => /^CHG\d+$/i.test(String(value || '').trim()));
+      if (changeNumber) {
+        let changeData = { picRequester: '-', entity: '-', serviceOffering: '-' };
+        try {
+          changeData = await client.scrapeChangeRequest(changeNumber);
+        } catch (err) {
+          addLog(`Detail CHG ${changeNumber} gagal diambil: ${err.message}`, 'warn');
+        }
+        detail = {
+          ...result.detail,
+          requestor: changeData.picRequester || '-',
+          location: changeData.entity || '-',
+          application: changeData.serviceOffering || '-',
+          nipp_nrk: '-',
+          contact: '-',
+          email: '-',
+          change_data: changeData
+        };
+      }
+      const validation = validateTicketData({ ...item, detail_tiket: detail });
       const validationErrors = [...validation.errors, ...validation.warnings.map((warning) => `Warning: ${warning}`)];
-      upsertTicket(state.run, { ...item, detail_tiket: result.detail, activities: result.activities, activities_status: result.activities_status, activities_error: result.activities_error, scrape_status: 'success', errors: validationErrors, validation_status: validation.valid ? (validation.warnings.length ? 'warning' : 'valid') : 'invalid' });
+      upsertTicket(state.run, { ...item, detail_tiket: detail, activities: result.activities, activities_status: result.activities_status, activities_error: result.activities_error, scrape_status: 'success', errors: validationErrors, validation_status: validation.valid ? (validation.warnings.length ? 'warning' : 'valid') : 'invalid' });
       if (validationErrors.length) addLog(`${row.nomor_tiket} memiliki catatan validasi: ${validationErrors.join('; ')}`, 'warn');
       addLog(`${row.nomor_tiket} berhasil`);
     } catch (err) {

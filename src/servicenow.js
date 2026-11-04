@@ -19,6 +19,7 @@ export class ServiceNowClient {
   constructor(options = {}) {
     this.options = { ...config, ...options };
     this.browser = null; this.context = null; this.page = null; this.listUrl = '';
+    this.chgCache = new Map();
   }
 
   async launch() {
@@ -33,11 +34,11 @@ export class ServiceNowClient {
 
   async close() { if (this.browser) await this.browser.close(); this.browser = null; this.page = null; }
 
-  async frame() {
-    if (!this.page) throw new Error('Browser belum dibuka');
-    await this.page.waitForLoadState('domcontentloaded').catch(() => {});
-    const frames = this.page.frames().filter((frame) => frame.name() === SELECTORS.frame);
-    if (!frames.length) return this.page.mainFrame();
+  async frame(page = this.page) {
+    if (!page) throw new Error('Browser belum dibuka');
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+    const frames = page.frames().filter((frame) => frame.name() === SELECTORS.frame);
+    if (!frames.length) return page.mainFrame();
     for (const candidate of frames.slice().reverse()) {
       const active = await candidate.locator('a.linked.formlink, [name="vcr_next"], [name="vcr_prev"]').count().catch(() => 0);
       if (active) return candidate;
@@ -444,6 +445,61 @@ export class ServiceNowClient {
     const activityItems = parseActivities(await this.readActivities(frame));
     info('Detail tiket selesai', { ticket: row.nomor_tiket, activities: activityItems.length });
     return { detail, activities: activityItems, activities_status: 'success', activities_error: null };
+  }
+
+  async scrapeChangeRequest(changeNumber) {
+    const number = String(changeNumber || '').trim();
+    if (!/^CHG\d+$/i.test(number)) throw new Error(`Nomor Change Request tidak valid: ${number || 'kosong'}`);
+    const cacheKey = number.toUpperCase();
+    if (this.chgCache.has(cacheKey)) return { ...this.chgCache.get(cacheKey) };
+    if (!this.page) throw new Error('Browser belum dibuka');
+
+    const page = await this.page.context().newPage();
+    const timeout = this.options.changeRequestTimeout || 10000;
+    try {
+      const listUrl = new URL('/change_request_list.do', this.options.baseUrl);
+      listUrl.searchParams.set('sysparm_query', `number=${number}`);
+      await page.goto(listUrl.href, { waitUntil: 'domcontentloaded', timeout });
+
+      const listFrame = await this.frame(page);
+      let record = listFrame.locator('a[href*="change_request.do"]').filter({ hasText: number }).first();
+      if (!(await record.count())) record = listFrame.locator('a[href*="change_request.do"]').first();
+      await record.waitFor({ state: 'visible', timeout });
+      await record.click();
+
+      const formFrame = await this.frame(page);
+      const fields = formFrame.locator([
+        'input[name="sys_display.change_request.u_pic_requester"]',
+        'input[id="sys_display.change_request.u_pic_requester"]',
+        'select[name="change_request.u_entity"]',
+        'select[id="change_request.u_entity"]',
+        'input[name="sys_display.change_request.service_offering"]',
+        'input[id="sys_display.change_request.service_offering"]'
+      ].join(', '));
+      await fields.first().waitFor({ state: 'attached', timeout });
+
+      const changeData = await formFrame.locator('body').evaluate(() => {
+        const inputValue = (selectors) => {
+          const input = selectors.map((selector) => document.querySelector(selector)).find(Boolean);
+          return (input?.getAttribute('value') || input?.value || '').trim() || '-';
+        };
+        const entity = document.querySelector('select[name="change_request.u_entity"], select[id="change_request.u_entity"]');
+        const entityText = entity?.options[entity.selectedIndex]?.text?.trim() || '';
+        return {
+          picRequester: inputValue(['input[id="sys_display.change_request.u_pic_requester"]', 'input[name="sys_display.change_request.u_pic_requester"]']),
+          entity: !entityText || /^--\s*none\s*--$/i.test(entityText) ? '-' : entityText,
+          serviceOffering: inputValue(['input[id="sys_display.change_request.service_offering"]', 'input[name="sys_display.change_request.service_offering"]'])
+        };
+      });
+      this.chgCache.set(cacheKey, changeData);
+      info('Detail Change Request selesai', { change: number });
+      return { ...changeData };
+    } catch (err) {
+      warn('Gagal mengambil detail Change Request', { change: number, message: err.message });
+      throw err;
+    } finally {
+      await page.close().catch((err) => warn('Gagal menutup tab Change Request', { change: number, message: err.message }));
+    }
   }
 
   async diagnose(filePath = `diagnostics/servicenow-${Date.now()}.html`) {

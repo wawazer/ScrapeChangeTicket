@@ -183,8 +183,10 @@ export function reportTicket(ticket, overrides = {}) {
   const detail = ticket.detail_tiket || {};
   const table = ticket.data_tabel || {};
   const value = (key, ...fallbacks) => {
-    const candidates = [overrides[key], detail[key], table[key], ...fallbacks.flatMap((fallback) => [detail[fallback], table[fallback]])];
-    return candidates.find((item) => hasUsefulValue(item) && !isSysId(item)) ?? '-';
+    const changeField = { requestor: 'picRequester', location: 'entity', application: 'serviceOffering' }[key];
+    const candidates = [overrides[key], detail[key], detail.change_data?.[key], detail.change_data?.[changeField], table[key], ...fallbacks.flatMap((fallback) => [detail[fallback], table[fallback]])];
+    const result = candidates.find((item) => hasUsefulValue(item) && !isSysId(item));
+    return result === undefined ? '-' : cleanText(result) || '-';
   };
   const change = value('change', 'change_request');
   const rawDescription = overrides.description ?? detail.deskripsi_permasalahan_text ?? (htmlToText(detail.deskripsi_permasalahan_html || '') || '-');
