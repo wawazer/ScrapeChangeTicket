@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/status-badge';
-import { Search, Download, Sparkles, X } from 'lucide-react';
+import { Search, Download, Sparkles, X, Pin, Star } from 'lucide-react';
 import type { AISummary, AppState, Ticket } from '@/lib/api';
 import { fetchTicketSummary } from '@/lib/http';
 import { firstValue } from '@/lib/format';
+import { useAISummaries } from '@/hooks/use-ai-summaries';
 
 interface TicketsViewProps {
   state: AppState;
@@ -20,6 +21,11 @@ export function TicketsView({ state }: TicketsViewProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [showPinnedOnly, setShowPinnedOnly] = useState(false);
+  const [loading, setLoading] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string | null>>({});
+  const { cache, getFromCache, togglePin, isPinned, exportCSV, clearCache, cacheSize, pinnedCount } = useAISummaries();
 
   const tickets = state.run?.tickets ?? [];
   const filtered = tickets.filter((ticket) => {
@@ -36,7 +42,9 @@ export function TicketsView({ state }: TicketsViewProps) {
         .join(' ')
         .toLowerCase()
         .includes(q);
-    return matchesQuery && (!statusFilter || ticket.scrape_status === statusFilter);
+    const matchesStatus = !statusFilter || ticket.scrape_status === statusFilter;
+    const matchesPinned = !showPinnedOnly || isPinned(ticket.nomor_tiket);
+    return matchesQuery && matchesStatus && matchesPinned;
   });
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -44,6 +52,23 @@ export function TicketsView({ state }: TicketsViewProps) {
   const start = (safePage - 1) * PAGE_SIZE;
   const pageItems = filtered.slice(start, start + PAGE_SIZE);
 
+  const handleSummarize = async (ticketNumber: string) => {
+    const cached = getFromCache(ticketNumber);
+    if (cached) { setExpanded(expanded === ticketNumber ? null : ticketNumber); return; }
+
+    setLoading(ticketNumber);
+    setErrors(prev => ({ ...prev, [ticketNumber]: null }));
+    try {
+      const result = await fetchTicketSummary(ticketNumber);
+      // saveToCache is not exposed, store directly
+      cache.set(ticketNumber, { ...result, ticketNumber, cachedAt: new Date().toISOString() });
+      setExpanded(ticketNumber);
+    } catch (err) {
+      setErrors(prev => ({ ...prev, [ticketNumber]: err instanceof Error ? err.message : 'Gagal memuat ringkasan' }));
+    } finally {
+      setLoading(null);
+    }
+  };
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -53,12 +78,25 @@ export function TicketsView({ state }: TicketsViewProps) {
             Tinjau atribut change management, catatan validasi, dan riwayat aktivitas sebelum diekspor.
           </p>
         </div>
-        <Button variant="secondary" asChild>
-          <a href="/api/export/json" download>
-            <Download className="mr-2 size-4" />
-            Unduh JSON
-          </a>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowPinnedOnly(!showPinnedOnly)}>
+            <Pin className="size-4 mr-1" />
+            {showPinnedOnly ? 'Tampilkan semua' : `Pinned (${pinnedCount})`}
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportCSV} disabled={cacheSize === 0}>
+            <Download className="size-4 mr-1" />
+            Export CSV ({cacheSize})
+          </Button>
+          <Button variant="ghost" size="sm" onClick={clearCache} disabled={cacheSize === 0}>
+            Hapus Cache
+          </Button>
+          <Button variant="secondary" asChild>
+            <a href="/api/export/json" download>
+              <Download className="mr-2 size-4" />
+              Unduh JSON
+            </a>
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -117,7 +155,17 @@ export function TicketsView({ state }: TicketsViewProps) {
                 </TableRow>
               ) : (
                 pageItems.map((ticket) => (
-                  <TicketRow key={ticket.nomor_tiket} ticket={ticket} />
+                  <TicketRow
+                    key={ticket.nomor_tiket}
+                    ticket={ticket}
+                    summary={getFromCache(ticket.nomor_tiket)}
+                    expanded={expanded === ticket.nomor_tiket}
+                    loading={loading === ticket.nomor_tiket}
+                    error={errors[ticket.nomor_tiket]}
+                    onToggleSummary={() => handleSummarize(ticket.nomor_tiket)}
+                    onTogglePin={() => togglePin(ticket.nomor_tiket)}
+                    isPinnedItem={isPinned(ticket.nomor_tiket)}
+                  />
                 ))
               )}
             </TableBody>
@@ -141,11 +189,18 @@ export function TicketsView({ state }: TicketsViewProps) {
   );
 }
 
-function TicketRow({ ticket }: { ticket: Ticket }) {
-  const [summary, setSummary] = useState<AISummary | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+interface TicketRowProps {
+  ticket: Ticket;
+  summary: AISummary | undefined;
+  expanded: boolean;
+  loading: boolean;
+  error: string | null;
+  onToggleSummary: () => void;
+  onTogglePin: () => void;
+  isPinnedItem: boolean;
+}
 
+function TicketRow({ ticket, summary, expanded, loading, error, onToggleSummary, onTogglePin, isPinnedItem }: TicketRowProps) {
   const detailStatus = ticket.detail_tiket?.status?.nama ?? ticket.detail_tiket?.status?.kode ?? 'Belum tersedia';
   const description = firstValue(
     ticket.data_tabel?.deskripsi_permasalahan_text,
@@ -158,23 +213,9 @@ function TicketRow({ ticket }: { ticket: Ticket }) {
     ticket.data_tabel?.ditugaskan_kepada
   );
 
-  const handleSummarize = async () => {
-    if (summary) { setSummary(null); return; }
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchTicketSummary(ticket.nomor_tiket);
-      setSummary(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal memuat ringkasan');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <>
-      <TableRow>
+      <TableRow className={summary?.riskLevel === 'high' ? 'bg-red-50 dark:bg-red-950/20' : ''}>
         <TableCell className="font-mono text-xs">{ticket.nomor_tiket}</TableCell>
         <TableCell className="text-xs">{ticket.data_tabel?.created ?? '—'}</TableCell>
         <TableCell className="text-xs">{ticket.data_tabel?.change_request ?? '—'}</TableCell>
@@ -189,13 +230,16 @@ function TicketRow({ ticket }: { ticket: Ticket }) {
             <span className="ml-2 text-[oklch(82%_0.14_75)] text-xs">Ada catatan</span>
           )}
         </TableCell>
-        <TableCell>
-          <Button variant="ghost" size="sm" onClick={handleSummarize} disabled={loading}>
-            {loading ? 'Memuat...' : summary ? <X className="size-4" /> : <Sparkles className="size-4" />}
+        <TableCell className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={onToggleSummary} disabled={loading}>
+            {loading ? '⏳' : summary ? <X className="size-4" /> : <Sparkles className="size-4" />}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onTogglePin}>
+            {isPinnedItem ? <Star className="size-4 fill-yellow-400 text-yellow-400" /> : <Pin className="size-4" />}
           </Button>
         </TableCell>
       </TableRow>
-      {summary && (
+      {summary && expanded && (
         <TableRow>
           <TableCell colSpan={8} className="bg-muted/50 px-4 py-3">
             <div className="flex flex-col gap-2 text-xs">
