@@ -9,7 +9,8 @@ import { createRun, checkpointPath, saveRun, upsertTicket } from './store.js';
 import { generatePdf } from './pdf.js';
 import { generateExcel } from './excel.js';
 import { validateTicketData } from './parsers.js';
-import { summarizeTicket } from './ai-summary.js';
+import { summarizeTicket } from './ai/summary.js';
+import { analyzeRisk } from './ai/analysis.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -256,6 +257,18 @@ app.get('/api/tickets/:number/summary', async (req, res) => {
     res.json({ ok: true, data: result });
   } catch (err) {
     error('AI Summary gagal', { message: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ai/analyze-risk', async (req, res) => {
+  try {
+    const { description, assignedTo, changeRequest, category } = req.body || {};
+    if (!description) return res.status(400).json({ error: 'description diperlukan' });
+    const result = await analyzeRisk({ description, assignedTo, changeRequest, category });
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    error('AI Risk Analysis gagal', { message: err.message });
     res.status(500).json({ error: err.message });
   }
 });
