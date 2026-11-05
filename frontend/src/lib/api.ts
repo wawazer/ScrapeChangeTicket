@@ -69,6 +69,13 @@ export interface AppState {
   export: ExportInfo;
 }
 
+export interface AISummary {
+  summary: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  category: string;
+}
+
+
 export interface FilterOption {
   name: string;
 }

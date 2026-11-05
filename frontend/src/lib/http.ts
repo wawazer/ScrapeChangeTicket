@@ -34,3 +34,9 @@ export function exportFilename(filter: string | undefined, extension: string) {
     .replace(/^_+|_+$/g, '');
   return `laporan-${base || 'servicenow'}.${extension}`;
 }
+
+export async function fetchTicketSummary(ticketNumber: string): Promise<import('./api').AISummary> {
+  const data = await request<{ ok: boolean; data: import('./api').AISummary }>(`/api/tickets/${encodeURIComponent(ticketNumber)}/summary`);
+  if (!data.ok) throw new Error('Gagal memuat ringkasan AI');
+  return data.data;
+}

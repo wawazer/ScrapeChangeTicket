@@ -9,6 +9,7 @@ import { createRun, checkpointPath, saveRun, upsertTicket } from './store.js';
 import { generatePdf } from './pdf.js';
 import { generateExcel } from './excel.js';
 import { validateTicketData } from './parsers.js';
+import { summarizeTicket } from './ai-summary.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -18,7 +19,8 @@ app.use(express.static(path.join(root, '..', 'public')));
 const state = {
   client: null, filters: [], selectedFilter: '', estimate: 0, run: null, runFile: '',
   evidence: {},
-  job: { status: 'idle', current: '', message: '', processed: 0, total: 0, logs: [] }
+  job: { status: 'idle', current: '', message: '', processed: 0, total: 0, logs: [] },
+  aiSummaries: new Map(),
 };
 
 function addLog(message, level = 'info') {
@@ -236,6 +238,26 @@ app.get('/api/export/excel', async (req, res) => {
     });
     res.download(file, path.basename(file));
   } catch (err) { error('Ekspor Excel gagal', { message: err.message }); res.status(500).json({ error: err.message }); }
+});
+app.get('/api/tickets/:number/summary', async (req, res) => {
+  try {
+    const { number } = req.params;
+    const cached = state.aiSummaries.get(number);
+    if (cached) return res.json({ ok: true, data: cached });
+    const ticket = state.run?.tickets.find((t) => t.nomor_tiket === number);
+    if (!ticket) return res.status(404).json({ error: 'Tiket tidak ditemukan' });
+    const detail = ticket.detail_tiket || {};
+    const result = await summarizeTicket({
+      description: String(detail.deskripsi_permasalahan || ticket.data_tabel?.deskripsi_permasalahan || ''),
+      assignedTo: String(detail.ditugaskan_kepada || detail.pic || ''),
+      changeRequest: String(ticket.data_tabel?.change_request || ''),
+    });
+    state.aiSummaries.set(number, result);
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    error('AI Summary gagal', { message: err.message });
+    res.status(500).json({ error: err.message });
+  }
 });
 app.get('*', (_req, res) => res.sendFile(path.join(root, '..', 'public', 'index.html')));
 

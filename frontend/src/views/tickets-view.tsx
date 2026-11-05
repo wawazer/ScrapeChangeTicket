@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/status-badge';
-import { Search, Download } from 'lucide-react';
-import type { AppState, Ticket } from '@/lib/api';
+import { Search, Download, Sparkles, X } from 'lucide-react';
+import type { AISummary, AppState, Ticket } from '@/lib/api';
+import { fetchTicketSummary } from '@/lib/http';
 import { firstValue } from '@/lib/format';
 
 interface TicketsViewProps {
@@ -104,12 +105,13 @@ export function TicketsView({ state }: TicketsViewProps) {
                 <TableHead>Assigned to</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Scrape status</TableHead>
+                <TableHead>AI</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {pageItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     Tidak ada tiket yang cocok. Periksa pencarian atau jalankan scraping.
                   </TableCell>
                 </TableRow>
@@ -140,6 +142,10 @@ export function TicketsView({ state }: TicketsViewProps) {
 }
 
 function TicketRow({ ticket }: { ticket: Ticket }) {
+  const [summary, setSummary] = useState<AISummary | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const detailStatus = ticket.detail_tiket?.status?.nama ?? ticket.detail_tiket?.status?.kode ?? 'Belum tersedia';
   const description = firstValue(
     ticket.data_tabel?.deskripsi_permasalahan_text,
@@ -152,22 +158,77 @@ function TicketRow({ ticket }: { ticket: Ticket }) {
     ticket.data_tabel?.ditugaskan_kepada
   );
 
+  const handleSummarize = async () => {
+    if (summary) { setSummary(null); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchTicketSummary(ticket.nomor_tiket);
+      setSummary(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal memuat ringkasan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <TableRow>
-      <TableCell className="font-mono text-xs">{ticket.nomor_tiket}</TableCell>
-      <TableCell className="text-xs">{ticket.data_tabel?.created ?? '—'}</TableCell>
-      <TableCell className="text-xs">{ticket.data_tabel?.change_request ?? '—'}</TableCell>
-      <TableCell className="max-w-xs truncate text-xs">{String(description).slice(0, 90)}</TableCell>
-      <TableCell className="text-xs">{String(assigned)}</TableCell>
-      <TableCell>
-        <span className="text-muted-foreground text-xs">{detailStatus}</span>
-      </TableCell>
-      <TableCell>
-        <StatusBadge status={ticket.scrape_status} />
-        {ticket.errors && ticket.errors.length > 0 && (
-          <span className="ml-2 text-[oklch(82%_0.14_75)] text-xs">Ada catatan</span>
-        )}
-      </TableCell>
-    </TableRow>
+    <>
+      <TableRow>
+        <TableCell className="font-mono text-xs">{ticket.nomor_tiket}</TableCell>
+        <TableCell className="text-xs">{ticket.data_tabel?.created ?? '—'}</TableCell>
+        <TableCell className="text-xs">{ticket.data_tabel?.change_request ?? '—'}</TableCell>
+        <TableCell className="max-w-xs truncate text-xs">{String(description).slice(0, 90)}</TableCell>
+        <TableCell className="text-xs">{String(assigned)}</TableCell>
+        <TableCell>
+          <span className="text-muted-foreground text-xs">{detailStatus}</span>
+        </TableCell>
+        <TableCell>
+          <StatusBadge status={ticket.scrape_status} />
+          {ticket.errors && ticket.errors.length > 0 && (
+            <span className="ml-2 text-[oklch(82%_0.14_75)] text-xs">Ada catatan</span>
+          )}
+        </TableCell>
+        <TableCell>
+          <Button variant="ghost" size="sm" onClick={handleSummarize} disabled={loading}>
+            {loading ? 'Memuat...' : summary ? <X className="size-4" /> : <Sparkles className="size-4" />}
+          </Button>
+        </TableCell>
+      </TableRow>
+      {summary && (
+        <TableRow>
+          <TableCell colSpan={8} className="bg-muted/50 px-4 py-3">
+            <div className="flex flex-col gap-2 text-xs">
+              <div><strong>Ringkasan:</strong> {summary.summary}</div>
+              <div className="flex gap-4">
+                <span><strong>Risiko:</strong> <RiskBadge level={summary.riskLevel} /></span>
+                <span><strong>Kategori:</strong> {summary.category}</span>
+              </div>
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+      {error && (
+        <TableRow>
+          <TableCell colSpan={8} className="bg-destructive/10 px-4 py-2 text-xs text-destructive">
+            {error}
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  );
+}
+
+function RiskBadge({ level }: { level: 'low' | 'medium' | 'high' }) {
+  const colors = {
+    low: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+    high: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  };
+  const labels = { low: 'Rendah', medium: 'Sedang', high: 'Tinggi' };
+  return (
+    <span className={`inline-flex items-center rounded-md px-2 py-0.5 font-medium ${colors[level]}`}>
+      {labels[level]}
+    </span>
   );
 }
