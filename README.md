@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  Node.js · Playwright · JavaScript ES Modules · PDF · Excel · JSON
+  Node.js · Playwright · React 19 · TypeScript · Tailwind CSS · PDF · Excel · JSON
 </p>
 
 <p align="center">
@@ -214,16 +214,19 @@ sequenceDiagram
 
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js |
-| Package manager | npm |
-| Backend | Node.js |
-| Frontend | HTML5, CSS3, JavaScript ES Modules |
-| Automation | Playwright |
-| PDF | Existing PDF generator in `src/pdf.js` |
-| Spreadsheet | ExcelJS |
-| Testing | Node.js Test Runner |
-| E2E Testing | Playwright Test |
-| Code quality | ESLint |
+| Runtime | Node.js v24.21.0 (ESM) |
+| Backend | Express ^4.21.2 |
+| Frontend | React ^19.3.1 + TypeScript ~7.0.2 |
+| Build tool | Vite ^8.3.5 |
+| Styling | Tailwind CSS ^4.3.4 (CSS-first) |
+| UI Components | shadcn/ui (Radix UI + Tailwind) |
+| Icons | lucide-react ^1.68.0 |
+| Automation | Playwright ^1.49.1 |
+| PDF | pdfkit ^0.16.0 |
+| Spreadsheet | exceljs ^4.4.0 |
+| Testing | Node.js Test Runner + Playwright Test |
+| Linting | ESLint (backend) + oxlint (frontend) |
+| Package manager | npm 11.19.0 |
 | Data format | JSON |
 
 ---
@@ -725,49 +728,85 @@ Use the actual endpoint and HTTP method defined in the current application. Some
 ScrapeChangeTicket/
 │
 ├── src/
-│   ├── server.js
-│   ├── servicenow.js
-│   ├── parsers.js
-│   ├── pdf.js
-│   └── excel.js
+│   ├── server.js              # Express HTTP server
+│   ├── servicenow.js          # Playwright automation
+│   ├── parsers.js             # Data normalization
+│   ├── pdf.js                 # PDF generation
+│   ├── excel.js               # Excel generation
+│   └── ai/                    # [Future] AI service modules
 │
-├── public/
+├── frontend/                  # Vite + React app (new)
+│   ├── src/
+│   │   ├── App.tsx            # Main router & state
+│   │   ├── main.tsx           # React entry
+│   │   ├── index.css          # Tailwind + theme
+│   │   ├── components/
+│   │   │   ├── ui/            # shadcn components
+│   │   │   ├── sidebar.tsx    # Navigation
+│   │   │   ├── topbar.tsx     # Header
+│   │   │   ├── status-badge.tsx
+│   │   │   └── metric-card.tsx
+│   │   ├── hooks/
+│   │   │   ├── use-app-state.ts
+│   │   │   ├── use-scrape-history.ts
+│   │   │   └── use-scraping-timer.ts
+│   │   ├── lib/
+│   │   │   ├── api.ts         # Type contracts
+│   │   │   ├── http.ts        # fetch wrapper
+│   │   │   ├── format.ts      # Format utils
+│   │   │   └── utils.ts       # cn()
+│   │   └── views/
+│   │       ├── dashboard-view.tsx
+│   │       ├── scrape-view.tsx
+│   │       ├── tickets-view.tsx
+│   │       ├── history-view.tsx
+│   │       ├── reports-view.tsx
+│   │       └── settings-view.tsx
 │   ├── index.html
-│   ├── styles.css
-│   ├── app.js
-│   └── assets/
+│   ├── vite.config.ts         # Build → ../public
+│   ├── tailwind.config.ts
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── public/                    # [Generated] Vite build output
+│   ├── index.html             # SPA entry
+│   ├── assets/                # index-<hash>.js|.css
+│   └── favicon.svg
 │
 ├── tests/
 │   ├── unit/
 │   ├── integration/
-│   └── e2e/
+│   ├── visual/
+│   └── e2e/                   # Playwright tests
+│       └── dashboard.spec.js
 │
 ├── reference/
-│
 ├── output/
 │
-├── .env
+├── .env                       # [NOT committed]
 ├── .env.example
 ├── .gitignore
-├── package.json
+├── package.json               # Backend + root scripts
 ├── package-lock.json
+├── playwright.config.js       # E2E config
+├── AI-ROADMAP.md
+├── DESIGN.md
 └── README.md
 ```
-
-The structure is a logical overview. Verify actual file and directory names in the current repository.
 
 ### Module responsibilities
 
 | File | Responsibility |
 |---|---|
-| `src/server.js` | HTTP server and application routes |
+| `src/server.js` | HTTP server, routes, SPA fallback |
 | `src/servicenow.js` | ServiceNow browser automation |
 | `src/parsers.js` | Data parsing and normalization |
 | `src/pdf.js` | PDF generation |
 | `src/excel.js` | Excel generation |
-| `public/index.html` | Frontend structure |
-| `public/styles.css` | Frontend styling |
-| `public/app.js` | Frontend application logic |
+| `frontend/src/App.tsx` | View routing and state wiring |
+| `frontend/src/hooks/use-app-state.ts` | Global state polling `/api/state` |
+| `frontend/src/views/*.tsx` | View components (Dashboard, Scrape, etc.) |
+| `frontend/vite.config.ts` | Build config: output to `../public` |
 
 ---
 
@@ -803,6 +842,12 @@ npx playwright test
 npx playwright test --headed
 ```
 
+### Run E2E in debug mode
+
+```powershell
+npx playwright test --debug
+```
+
 ### Run a specific test file
 
 ```powershell
@@ -819,6 +864,13 @@ node --test tests/integration/export.test.js
 node --test tests/unit/*.test.js tests/integration/*.test.js
 ```
 
+### Frontend lint
+
+```powershell
+cd frontend
+npm run lint
+```
+
 ### Test coverage areas
 
 | Area | Validation |
@@ -830,20 +882,17 @@ node --test tests/unit/*.test.js tests/integration/*.test.js
 | PDF | Layout and continuation pages |
 | Excel | Worksheet and cell validation |
 | API | Response status and validation |
-| Frontend | Button state and progress |
-| E2E | User workflow |
+| Frontend | Button state, view navigation, timer, history |
+| E2E | User workflow (credentials, navigation, exports) |
 
-### Previous reported checkpoint
+### Frontend-specific tests
 
-| Test | Reported result |
-|---|---:|
-| Node tests | 24 passed |
-| ESLint | Passed |
-| Playwright E2E | 2 passed |
-| PDF sample | Valid |
-| Excel sample | Valid |
-
-These are historical checkpoint results, not a guarantee of the current working tree. Re-run tests after modifications.
+| Test | File | Coverage |
+|---|---|---|
+| Dashboard loads | `tests/e2e/dashboard.spec.js` | No credential leakage, heading visible |
+| View navigation | `tests/e2e/dashboard.spec.js` | Data tickets, Export reports, buttons |
+| Live timer | Manual / browser | MM:SS format during scraping |
+| Clear history | Manual / browser | AlertDialog → confirm → localStorage cleared |
 
 ---
 
