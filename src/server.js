@@ -102,12 +102,13 @@ async function runScrape({ limit = 0, includeScreenshot = false } = {}) {
         }
         detail = {
           ...result.detail,
-          requestor: changeData.picRequester || '-',
-          location: changeData.entity || '-',
-          application: changeData.serviceOffering || '-',
-          nipp_nrk: '-',
-          contact: '-',
-          email: '-',
+          requestor: changeData.picRequester || detail.requestor || '-',
+          location: changeData.entity || detail.location || '-',
+          application: changeData.serviceOffering || detail.application || '-',
+          // Popup PIC requester memakai camelCase; laporan memakai snake_case.
+          contact: changeData.contact || detail.contact || '-',
+          email: changeData.email || detail.email || '-',
+          nipp_nrk: changeData.nippNrk || changeData.nipp_nrk || detail.nipp_nrk || '-',
           change_data: changeData
         };
       }

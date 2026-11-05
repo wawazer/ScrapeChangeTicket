@@ -123,7 +123,8 @@ export function parseDetailFields({ fields = {}, statusOptions = {}, description
 }
 
 const sysIdPattern = /^[a-f0-9]{24,40}$/i;
-const hasUsefulValue = (value) => value !== undefined && value !== null && cleanText(value) !== '';
+// '-' adalah placeholder kosong, jadi nilai nyata dari sumber lain tetap dipakai.
+const hasUsefulValue = (value) => value !== undefined && value !== null && !['', '-'].includes(cleanText(value));
 
 export function isSysId(value) {
   return sysIdPattern.test(cleanText(value));
@@ -183,7 +184,7 @@ export function reportTicket(ticket, overrides = {}) {
   const detail = ticket.detail_tiket || {};
   const table = ticket.data_tabel || {};
   const value = (key, ...fallbacks) => {
-    const changeField = { requestor: 'picRequester', location: 'entity', application: 'serviceOffering' }[key];
+    const changeField = { requestor: 'picRequester', location: 'entity', application: 'serviceOffering', nipp_nrk: 'nippNrk' }[key];
     const candidates = [overrides[key], detail[key], detail.change_data?.[key], detail.change_data?.[changeField], table[key], ...fallbacks.flatMap((fallback) => [detail[fallback], table[fallback]])];
     const result = candidates.find((item) => hasUsefulValue(item) && !isSysId(item));
     return result === undefined ? '-' : cleanText(result) || '-';

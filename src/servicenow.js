@@ -491,6 +491,55 @@ export class ServiceNowClient {
           serviceOffering: inputValue(['input[id="sys_display.change_request.service_offering"]', 'input[name="sys_display.change_request.service_offering"]'])
         };
       });
+      const readUserData = async () => {
+        for (const candidate of page.frames()) {
+          const data = await candidate.locator('body').evaluate(() => {
+            const visible = (element) => element.checkVisibility
+              ? element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+              : element.getClientRects().length > 0;
+            const selectors = ['mobile_phone', 'email', 'user_name', 'employee_number']
+              .flatMap((field) => [`input[id="sys_readonly.sys_user.${field}"]`, `input[name="sys_readonly.sys_user.${field}"]`]);
+            const popupVisible = [...document.querySelectorAll(selectors.join(', '))].some(visible);
+            const valueOf = (field) => {
+              const inputs = document.querySelectorAll(`input[id="sys_readonly.sys_user.${field}"], input[name="sys_readonly.sys_user.${field}"]`);
+              const input = [...inputs].find(visible) || inputs[0];
+              return (input?.value || input?.getAttribute('value') || '').trim() || '-';
+            };
+            const userName = valueOf('user_name');
+            const values = {
+              contact: valueOf('mobile_phone'),
+              email: valueOf('email'),
+              nippNrk: userName !== '-' ? userName : valueOf('employee_number')
+            };
+            // ServiceNow mengisi atribut value secara asinkron; jangan terima popup yang masih kosong.
+            const filled = Object.values(values).some((value) => value !== '-');
+            return { popupVisible, filled, ...values };
+          }).catch(() => null);
+          if (data?.popupVisible && data.filled) {
+            return { contact: data.contact, email: data.email, nippNrk: data.nippNrk };
+          }
+        }
+        return null;
+      };
+      let userData = await readUserData();
+      if (!userData) {
+        const preview = formFrame.locator([
+          'button[id="viewr.change_request.u_pic_requester"]',
+          'button[data-ref="change_request.u_pic_requester"]',
+          'a[id="viewr.change_request.u_pic_requester"]'
+        ].join(', ')).first();
+        if (await preview.count()) {
+          await preview.click({ timeout: 5000 }).catch((err) => warn('Gagal membuka preview PIC requester', { change: number, message: err.message }));
+          const deadline = Date.now() + 8000;
+          while (!userData && Date.now() < deadline) {
+            await page.waitForTimeout(100);
+            userData = await readUserData();
+          }
+        }
+      }
+      if (userData) info('Data pengguna PIC requester diekstrak', { change: number, ...userData });
+      else warn('Preview PIC requester tidak tersedia; memakai fallback', { change: number });
+      Object.assign(changeData, { contact: '-', email: '-', nippNrk: '-' }, userData || {});
       this.chgCache.set(cacheKey, changeData);
       info('Detail Change Request selesai', { change: number });
       return { ...changeData };

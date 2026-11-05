@@ -204,6 +204,80 @@ test('scraping merges parent Change Request fields into the saved CTASK detail',
   }
 });
 
+test('scraping maps Change Request contact, email and NIPP into the saved CTASK detail', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pelindo-chg-user-'));
+  const previousOutput = config.outputDir;
+  const previousNoServer = process.env.NO_SERVER;
+  config.outputDir = directory;
+  process.env.NO_SERVER = 'true';
+  const { state, runScrape } = await import('../../src/server.js');
+  state.client = {
+    async launch() {},
+    async readAllTickets() {
+      return { tickets: [{ nomor_tiket: 'CTASK0016982', values: { change_request: 'CHG0004563' } }] };
+    },
+    async scrapeDetail() {
+      return { detail: { change_request: '', contact: '', email: '', nipp_nrk: '' }, activities: [], activities_status: 'success', activities_error: null };
+    },
+    async scrapeChangeRequest(number) {
+      assert.equal(number, 'CHG0004563');
+      return {
+        picRequester: 'CHG requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering',
+        contact: '08128467206', email: 'user@example.com', nippNrk: '103047'
+      };
+    },
+    async restoreList() {}
+  };
+  state.selectedFilter = 'CTASK CHG user test';
+  state.job = { status: 'idle', current: '', message: '', processed: 0, total: 0, logs: [] };
+  try {
+    await runScrape();
+    const detail = state.run.tickets[0].detail_tiket;
+    assert.equal(detail.contact, '08128467206');
+    assert.equal(detail.email, 'user@example.com');
+    assert.equal(detail.nipp_nrk, '103047');
+    assert.deepEqual(detail.change_data, {
+      picRequester: 'CHG requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering',
+      contact: '08128467206', email: 'user@example.com', nippNrk: '103047'
+    });
+  } finally {
+    state.client = null;
+    state.run = null;
+    state.runFile = '';
+    config.outputDir = previousOutput;
+    if (previousNoServer === undefined) delete process.env.NO_SERVER;
+    else process.env.NO_SERVER = previousNoServer;
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('PDF and Excel exports include Change Request contact, email and NIPP', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pelindo-chg-user-export-'));
+  try {
+    const run = createRun('CTASK CHG user test');
+    upsertTicket(run, ticket('CTASK0016983', {
+      contact: '-', email: '-', nipp_nrk: '-',
+      change_data: { picRequester: 'CHG requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering', contact: '08128467206', email: 'user@example.com', nippNrk: '103047' }
+    }));
+
+    const excelPath = path.join(directory, 'chg-user.xlsx');
+    await generateExcel(run, excelPath);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(excelPath);
+    const row = workbook.getWorksheet('Patch Release').getRow(2);
+    assert.deepEqual([14, 15, 16].map((column) => row.getCell(column).value), ['103047', '08128467206', 'user@example.com']);
+
+    const pdfPath = path.join(directory, 'chg-user.pdf');
+    await generatePdf(run, pdfPath);
+    const text = (await pdfText(pdfPath)).pages.join(' ');
+    assert.match(text, /103047/);
+    assert.match(text, /08128467206/);
+    assert.match(text, /user@example\.com/);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('PDF and Excel exports display Change Request fields and dash fallbacks', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pelindo-chg-export-'));
   try {

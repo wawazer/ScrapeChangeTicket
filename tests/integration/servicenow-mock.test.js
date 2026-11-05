@@ -107,6 +107,8 @@ test('mock ServiceNow scrapes and caches Change Request data without changing th
     await context.route('**/change_request.do?*', (route) => route.fulfill({
       contentType: 'text/html',
       body: `<!doctype html><form>
+        <button id="viewr.change_request.u_pic_requester" type="button">Preview</button>
+        <script>document.querySelector('button').onclick = () => parent.document.body.insertAdjacentHTML('beforeend', '<div><input id="sys_readonly.sys_user.mobile_phone" value="08128467206"><input id="sys_readonly.sys_user.email" value="ARYANTI_WIHARYA@PELINDO.CO.ID"><input id="sys_readonly.sys_user.user_name" value="103047"><input id="sys_readonly.sys_user.employee_number" value="EMPLOYEE"></div>')</script>
         <input id="sys_display.change_request.u_pic_requester" value="CHG Requester">
         <select id="change_request.u_entity"><option value="1" selected>Kantor Pusat</option></select>
         <input name="sys_display.change_request.service_offering" value="Service Offering">
@@ -114,11 +116,103 @@ test('mock ServiceNow scrapes and caches Change Request data without changing th
     }));
 
     const data = await client.scrapeChangeRequest('CHG0004562');
-    assert.deepEqual(data, { picRequester: 'CHG Requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering' });
+    assert.deepEqual(data, {
+      picRequester: 'CHG Requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering',
+      contact: '08128467206', email: 'ARYANTI_WIHARYA@PELINDO.CO.ID', nippNrk: '103047'
+    });
     assert.equal(client.page.url(), originalUrl);
-
     assert.deepEqual(await client.scrapeChangeRequest('chg0004562'), data);
     assert.equal(listRequests, 1);
     assert.equal(client.page.url(), originalUrl);
+  });
+});
+
+test('mock ServiceNow reads an already open requester popup and falls back to employee number', async () => {
+  await withMock('<!doctype html><body>CTASK page</body>', async ({ client }) => {
+    const context = client.page.context();
+    await context.route('**/change_request_list.do?*', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><a href="/change_request.do?sys_id=3">CHG0004564</a>'
+    }));
+    await context.route('**/change_request.do?*', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><form>
+        <button id="viewr.change_request.u_pic_requester" type="button" onclick="document.getElementById('user-card').remove()">Preview</button>
+        <div id="user-card">
+          <input id="sys_readonly.sys_user.mobile_phone" value="08128467206">
+          <input id="sys_readonly.sys_user.email" value="user@example.com">
+          <input id="sys_readonly.sys_user.user_name" value="">
+          <input id="sys_readonly.sys_user.employee_number" value="EMP-103047">
+        </div>
+        <input name="sys_display.change_request.u_pic_requester" value="CHG Requester">
+        <select name="change_request.u_entity"><option value="1" selected>Kantor Pusat</option></select>
+        <input name="sys_display.change_request.service_offering" value="Service Offering">
+      </form>`
+    }));
+
+    const data = await client.scrapeChangeRequest('CHG0004564');
+    assert.deepEqual(data, {
+      picRequester: 'CHG Requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering',
+      contact: '08128467206', email: 'user@example.com', nippNrk: 'EMP-103047'
+    });
+  });
+});
+
+test('mock ServiceNow waits for the requester popup values to be filled asynchronously', async () => {
+  await withMock('<!doctype html><body>CTASK page</body>', async ({ client }) => {
+    const context = client.page.context();
+    await context.route('**/change_request_list.do?*', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><a href="/change_request.do?sys_id=5">CHG0004566</a>'
+    }));
+    await context.route('**/change_request.do?*', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><form>
+        <button id="viewr.change_request.u_pic_requester" type="button">Preview</button>
+        <script>
+          document.querySelector('button').onclick = () => {
+            document.body.insertAdjacentHTML('beforeend', '<div><input id="sys_readonly.sys_user.mobile_phone"><input id="sys_readonly.sys_user.email"><input id="sys_readonly.sys_user.user_name"></div>');
+            setTimeout(() => {
+              document.getElementById('sys_readonly.sys_user.mobile_phone').setAttribute('value', '081200000000');
+              document.getElementById('sys_readonly.sys_user.email').setAttribute('value', 'async@example.com');
+              document.getElementById('sys_readonly.sys_user.user_name').setAttribute('value', '103999');
+            }, 500);
+          };
+        </script>
+        <input name="sys_display.change_request.u_pic_requester" value="CHG Requester">
+        <select name="change_request.u_entity"><option value="1" selected>Kantor Pusat</option></select>
+        <input name="sys_display.change_request.service_offering" value="Service Offering">
+      </form>`
+    }));
+
+    const data = await client.scrapeChangeRequest('CHG0004566');
+    assert.deepEqual(data, {
+      picRequester: 'CHG Requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering',
+      contact: '081200000000', email: 'async@example.com', nippNrk: '103999'
+    });
+  });
+});
+
+test('mock ServiceNow keeps CHG scraping successful when the requester preview is absent', async () => {
+  await withMock('<!doctype html><body>CTASK page</body>', async ({ client }) => {
+    const context = client.page.context();
+    await context.route('**/change_request_list.do?*', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: '<!doctype html><a href="/change_request.do?sys_id=4">CHG0004565</a>'
+    }));
+    await context.route('**/change_request.do?*', (route) => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><form>
+        <input name="sys_display.change_request.u_pic_requester" value="CHG Requester">
+        <select name="change_request.u_entity"><option value="1" selected>Kantor Pusat</option></select>
+        <input name="sys_display.change_request.service_offering" value="Service Offering">
+      </form>`
+    }));
+
+    const data = await client.scrapeChangeRequest('CHG0004565');
+    assert.deepEqual(data, {
+      picRequester: 'CHG Requester', entity: 'Kantor Pusat', serviceOffering: 'Service Offering',
+      contact: '-', email: '-', nippNrk: '-'
+    });
   });
 });

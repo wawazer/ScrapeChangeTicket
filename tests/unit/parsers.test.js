@@ -88,6 +88,20 @@ test('prefers Change Request values when preparing report fields', () => {
   assert.equal(report.email, '-');
 });
 
+test('maps Change Request popup contact, email and NIPP into report fields', () => {
+  const report = reportTicket({
+    nomor_tiket: 'CTASK0003',
+    data_tabel: {},
+    detail_tiket: {
+      contact: '-', email: '-', nipp_nrk: '-',
+      change_data: { contact: '08128467206', email: 'user@example.com', nippNrk: '103047' }
+    }
+  });
+  assert.equal(report.nipp_nrk, '103047');
+  assert.equal(report.contact, '08128467206');
+  assert.equal(report.email, 'user@example.com');
+});
+
 test('converts a ServiceNow state code using the selected option label', () => {
   const detail = parseDetailFields({ fields: { status: { value: '3', text: '3' } }, statusOptions: { '3': 'Closed' } });
   assert.deepEqual(detail.status, { kode: '3', nama: 'Closed' });
