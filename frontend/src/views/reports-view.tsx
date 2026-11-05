@@ -93,6 +93,20 @@ export function ReportsView({ state }: ReportsViewProps) {
 
       <div className="flex flex-wrap gap-3">
         <Button
+          variant="outline"
+          disabled={exportDisabled}
+          onClick={() => {
+            const params = new URLSearchParams({
+              period,
+              resultDefault,
+            });
+            window.open(`/api/export/pdf-preview?${params}`, '_blank', 'noopener');
+          }}
+        >
+          <FileText className="mr-2 size-4" />
+          Preview PDF
+        </Button>
+        <Button
           variant="secondary"
           disabled={exportDisabled}
           onClick={() => downloadFile('/api/export/pdf', {}, exportFilename(state.export?.filter, 'pdf'))}
