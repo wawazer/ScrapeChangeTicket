@@ -11,6 +11,7 @@ import { generateExcel } from './excel.js';
 import { validateTicketData } from './parsers.js';
 import { summarizeTicket } from './ai/summary.js';
 import { analyzeRisk } from './ai/analysis.js';
+import { detectDuplicates } from './ai/duplicate.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -322,6 +323,37 @@ app.post('/api/ai/analyze-risk', async (req, res) => {
     res.json({ ok: true, data: result });
   } catch (err) {
     error('AI Risk Analysis gagal', { message: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ai/detect-duplicates', async (req, res) => {
+  try {
+    const { targetTicket, historicalTickets } = req.body || {};
+    if (!targetTicket) return res.status(400).json({ error: 'targetTicket diperlukan' });
+
+    // shortcut: jika historicalTickets tidak dikirim, ambil dari tiket run aktif yang bukan target.
+    let history = historicalTickets;
+    if (!history || !Array.isArray(history) || history.length === 0) {
+      const allTickets = state.run?.tickets || [];
+      const targetNo = targetTicket.number || targetTicket.nomor_tiket;
+      history = allTickets
+        .filter((t) => t.nomor_tiket !== targetNo && t.scrape_status === 'success')
+        .map((t) => ({
+          number: t.nomor_tiket,
+          short_description: t.detail_tiket?.deskripsi_singkat || t.data_tabel?.deskripsi_singkat || t.data_tabel?.short_description || '',
+          configuration_item: t.detail_tiket?.configuration_item || t.data_tabel?.configuration_item || '',
+          application: t.detail_tiket?.application || t.data_tabel?.application || '',
+          description: t.detail_tiket?.deskripsi_permasalahan || t.data_tabel?.deskripsi_permasalahan || '',
+          state: t.detail_tiket?.status?.nama || t.data_tabel?.state || 'Closed',
+          created_at: t.detail_tiket?.start_date || t.data_tabel?.start_date || '',
+        }));
+    }
+
+    const result = await detectDuplicates(targetTicket, history);
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    error('AI Duplicate Detection gagal', { message: err.message });
     res.status(500).json({ error: err.message });
   }
 });

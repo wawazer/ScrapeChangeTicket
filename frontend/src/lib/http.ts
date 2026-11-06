@@ -54,3 +54,16 @@ export async function fetchTicketRisk(ticket: {
   if (!data.ok) throw new Error('Gagal memuat analisis risiko');
   return data.data;
 }
+
+export async function fetchDuplicateDetection(
+  targetTicket: Record<string, unknown>,
+  historicalTickets?: Array<Record<string, unknown>>
+): Promise<import('./api').DuplicateDetectionResult> {
+  const data = await request<{ ok: boolean; data: import('./api').DuplicateDetectionResult }>('/api/ai/detect-duplicates', {
+    method: 'POST',
+    body: JSON.stringify({ targetTicket, historicalTickets }),
+  });
+  if (!data.ok) throw new Error('Gagal memproses deteksi duplikasi');
+  return data.data;
+}
+

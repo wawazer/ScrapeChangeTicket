@@ -82,6 +82,20 @@ export interface RiskAnalysisResult {
   recommendedMitigations: string[];
 }
 
+export interface DuplicateMatch {
+  ticket_number: string;
+  similarity_score: number;
+  match_level: 'HIGH' | 'MEDIUM' | 'LOW';
+  is_recurring_issue: boolean;
+  reason: string;
+}
+
+export interface DuplicateDetectionResult {
+  target_ticket_number: string;
+  has_duplicates: boolean;
+  duplicates: DuplicateMatch[];
+  recommendation: string;
+}
 
 export interface FilterOption {
   name: string;

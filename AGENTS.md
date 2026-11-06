@@ -21,7 +21,7 @@ To update antislop later: `npx antislop-ai --update`, or run `npx antislop-ai` a
   - `nipp_nrk` <- mapped from `user_name`
   - iFrame selector: `#gsft_main`
   - User popup selector: `sys_readonly.sys_user.*`
-- **AI Assistant Identity**: My name is **friday**. I am an AI assistant using Copilot SDK in VS Code.
+- **AI Assistant Identity**: My name is **deztra**. I am an AI assistant using Copilot SDK in VS Code.
 
 ## Backend Files (`src/`)
 | File | Role / Responsibility |
@@ -34,12 +34,12 @@ To update antislop later: `npx antislop-ai --update`, or run `npx antislop-ai` a
 | `src/parsers.js` | DOM table extraction and ticket field normalization |
 | `src/servicenow.js` | Playwright browser automation for ServiceNow ticket scraping |
 | `src/pdf.js` | PDF patch release report generation (PDFKit) |
-| `src/pdf.js` | PDF patch release report generation (PDFKit) |
 | `src/excel.js` | Excel export generator with custom styling (ExcelJS) |
-| `src/ai/provider.js` | Multi-provider LLM client dispatcher (Groq, 9Router, Ollama) |
+| `src/ai/provider.js` | Multi-provider LLM client dispatcher (Groq, Gemini, Ollama, DeepSeek, OpenRouter) |
 | `src/ai/summary.js` | Ticket executive summary generator via LLM with fallback |
 | `src/ai/risk.js` | Risk analysis & deployment mitigation generator |
 | `src/ai/analysis.js` | Combined multi-ticket AI analysis pipeline |
+| `src/ai/duplicate.js` | Semantic duplicate & recurring issue detection with fallback |
 
 ## Frontend Views (`frontend/src/views/`)
 | File | Role / Responsibility |
