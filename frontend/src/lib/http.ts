@@ -40,3 +40,17 @@ export async function fetchTicketSummary(ticketNumber: string): Promise<import('
   if (!data.ok) throw new Error('Gagal memuat ringkasan AI');
   return data.data;
 }
+
+export async function fetchTicketRisk(ticket: {
+  description: string;
+  assignedTo?: string;
+  changeRequest?: string;
+  category?: string;
+}): Promise<import('./api').RiskAnalysisResult> {
+  const data = await request<{ ok: boolean; data: import('./api').RiskAnalysisResult }>('/api/ai/analyze-risk', {
+    method: 'POST',
+    body: JSON.stringify(ticket),
+  });
+  if (!data.ok) throw new Error('Gagal memuat analisis risiko');
+  return data.data;
+}

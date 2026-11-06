@@ -1,24 +1,37 @@
 /**
  * AI provider abstraction for ScrapeChangeTicket.
  *
- * ponytail: currently only Groq is implemented. Add a new provider by
- *   exporting an object matching the LlmProvider interface below, then wire
- *   it via AI_PROVIDER env (values: 'groq' | 'gemini' | 'ollama').
- *   Upgrade path: replace summarize() body per provider while keeping the
- *   same prompt shape and return contract.
+ * ponytail: every provider here speaks the OpenAI-compatible chat API, so one
+ *   fetch implementation serves all of them. Add a provider by adding an
+ *   entry to PROVIDERS, then set AI_PROVIDER to its name.
+ *   Upgrade path: give a provider its own chat() body only if its API stops
+ *   being OpenAI-compatible.
  */
 
-const DEFAULTS = {
+const PROVIDERS = {
   groq: {
     endpoint: 'https://api.groq.com/openai/v1/chat/completions',
     model: 'qwen/qwen3.8-27b',
+    apiKeyEnv: 'GROQ_API_KEY',
+    modelEnv: 'GROQ_MODEL',
+  },
+  gemini: {
+    endpoint: process.env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    model: 'gemini-2.0-flash',
+    apiKeyEnv: 'GEMINI_API_KEY',
+    modelEnv: 'GEMINI_MODEL',
+  },
+  ollama: {
+    endpoint: `${(process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/+$/, '')}/v1/chat/completions`,
+    model: 'llama3.2',
+    modelEnv: 'OLLAMA_MODEL',
   },
 };
 
 function pickProvider(name) {
   const n = (name || 'groq').toLowerCase();
-  if (n === 'groq') return 'groq';
-  throw new Error(`Provider "${name}" tidak didukung. Gunakan: groq`);
+  if (!PROVIDERS[n]) throw new Error(`Provider "${name}" tidak didukung. Gunakan: ${Object.keys(PROVIDERS).join(', ')}`);
+  return n;
 }
 
 /**
@@ -33,29 +46,31 @@ function pickProvider(name) {
  */
 
 /**
- * Build a Groq-compatible provider from environment.
+ * Build a provider from environment, dispatching on AI_PROVIDER.
+ * All supported providers speak the OpenAI-compatible chat completions API,
+ * so the transport is shared and only endpoint/model/key differ.
  * @returns {LlmProvider}
  */
 export function createProvider() {
   const providerName = pickProvider(process.env.AI_PROVIDER);
-  const defaults = DEFAULTS[providerName];
-  const apiKey = process.env.GROQ_API_KEY || '';
+  const spec = PROVIDERS[providerName];
+  const apiKey = process.env[spec.apiKeyEnv] || '';
 
-  if (!apiKey && providerName === 'groq') {
-    throw new Error('GROQ_API_KEY harus dikonfigurasi untuk provider Groq');
+  if (!apiKey && providerName !== 'ollama') {
+    throw new Error(`${spec.apiKeyEnv} harus dikonfigurasi untuk provider ${providerName}`);
   }
 
   /** @type {LlmProvider} */
-  const groq = {
+  return {
     async chat(messages) {
-      const response = await fetch(defaults.endpoint, {
+      const response = await fetch(spec.endpoint, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          ...(apiKey && { Authorization: `Bearer ${apiKey}` }),
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: process.env.GROQ_MODEL || defaults.model,
+          model: process.env[spec.modelEnv] || spec.model,
           messages,
           max_tokens: 512,
           temperature: 0.3,
@@ -65,15 +80,13 @@ export function createProvider() {
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.error?.message || `Groq API error ${response.status}`);
+        throw new Error(err.error?.message || `${providerName} API error ${response.status}`);
       }
 
       const data = await response.json();
       return data.choices?.[0]?.message?.content || '';
     },
   };
-
-  return groq[providerName];
 }
 
 /**

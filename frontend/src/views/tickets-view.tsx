@@ -5,11 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { StatusBadge } from '@/components/status-badge';
-import { Search, Download, Sparkles, X, Pin, Star } from 'lucide-react';
-import type { AISummary, AppState, Ticket } from '@/lib/api';
-import { fetchTicketSummary } from '@/lib/http';
+import { Search, Download, Sparkles, X, Pin, Star, ShieldAlert } from 'lucide-react';
+import type { AISummary, AppState, Ticket, RiskAnalysisResult } from '@/lib/api';
+import { fetchTicketSummary, fetchTicketRisk } from '@/lib/http';
 import { firstValue } from '@/lib/format';
 import { useAISummaries } from '@/hooks/use-ai-summaries';
+
+import { RiskBadge } from '@/components/risk-badge';
 
 interface TicketsViewProps {
   state: AppState;
@@ -26,6 +28,8 @@ export function TicketsView({ state }: TicketsViewProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const { cache, getFromCache, togglePin, isPinned, exportCSV, clearCache, cacheSize, pinnedCount } = useAISummaries();
+  const [risks, setRisks] = useState<Record<string, RiskAnalysisResult>>({});
+  const [loadingRisk, setLoadingRisk] = useState<string | null>(null);
 
   const tickets = state.run?.tickets ?? [];
   const filtered = tickets.filter((ticket) => {
@@ -67,6 +71,36 @@ export function TicketsView({ state }: TicketsViewProps) {
       setErrors(prev => ({ ...prev, [ticketNumber]: err instanceof Error ? err.message : 'Gagal memuat ringkasan' }));
     } finally {
       setLoading(null);
+    }
+  };
+
+  const handleAnalyzeRisk = async (ticketNumber: string) => {
+    if (risks[ticketNumber]) { setExpanded(expanded === ticketNumber ? null : ticketNumber); return; }
+
+    const ticket = tickets.find((t) => t.nomor_tiket === ticketNumber);
+    if (!ticket) { setErrors(prev => ({ ...prev, [ticketNumber]: 'Tiket tidak ditemukan' })); return; }
+    const description = String(
+      ticket.detail_tiket?.deskripsi_permasalahan ||
+      ticket.data_tabel?.deskripsi_permasalahan_text ||
+      ticket.data_tabel?.deskripsi_permasalahan ||
+      ''
+    );
+    if (!description) { setErrors(prev => ({ ...prev, [ticketNumber]: 'Deskripsi tiket kosong' })); return; }
+
+    setLoadingRisk(ticketNumber);
+    setErrors(prev => ({ ...prev, [ticketNumber]: null }));
+    try {
+      const result = await fetchTicketRisk({
+        description,
+        assignedTo: String(ticket.detail_tiket?.ditugaskan_kepada || ticket.detail_tiket?.pic || ticket.data_tabel?.ditugaskan_kepada || ''),
+        changeRequest: String(ticket.data_tabel?.change_request || ''),
+      });
+      setRisks(prev => ({ ...prev, [ticketNumber]: result }));
+      setExpanded(ticketNumber);
+    } catch (err) {
+      setErrors(prev => ({ ...prev, [ticketNumber]: err instanceof Error ? err.message : 'Gagal memuat analisis risiko' }));
+    } finally {
+      setLoadingRisk(null);
     }
   };
   return (
@@ -159,10 +193,13 @@ export function TicketsView({ state }: TicketsViewProps) {
                     key={ticket.nomor_tiket}
                     ticket={ticket}
                     summary={getFromCache(ticket.nomor_tiket)}
+                    risk={risks[ticket.nomor_tiket]}
                     expanded={expanded === ticket.nomor_tiket}
                     loading={loading === ticket.nomor_tiket}
+                    loadingRisk={loadingRisk === ticket.nomor_tiket}
                     error={errors[ticket.nomor_tiket]}
                     onToggleSummary={() => handleSummarize(ticket.nomor_tiket)}
+                    onToggleRisk={() => handleAnalyzeRisk(ticket.nomor_tiket)}
                     onTogglePin={() => togglePin(ticket.nomor_tiket)}
                     isPinnedItem={isPinned(ticket.nomor_tiket)}
                   />
@@ -192,15 +229,30 @@ export function TicketsView({ state }: TicketsViewProps) {
 interface TicketRowProps {
   ticket: Ticket;
   summary: AISummary | undefined;
+  risk: RiskAnalysisResult | undefined;
   expanded: boolean;
   loading: boolean;
+  loadingRisk: boolean;
   error: string | null;
   onToggleSummary: () => void;
+  onToggleRisk: () => void;
   onTogglePin: () => void;
   isPinnedItem: boolean;
 }
 
-function TicketRow({ ticket, summary, expanded, loading, error, onToggleSummary, onTogglePin, isPinnedItem }: TicketRowProps) {
+function TicketRow({
+  ticket,
+  summary,
+  risk,
+  expanded,
+  loading,
+  loadingRisk,
+  error,
+  onToggleSummary,
+  onToggleRisk,
+  onTogglePin,
+  isPinnedItem,
+}: TicketRowProps) {
   const detailStatus = ticket.detail_tiket?.status?.nama ?? ticket.detail_tiket?.status?.kode ?? 'Belum tersedia';
   const description = firstValue(
     ticket.data_tabel?.deskripsi_permasalahan_text,
@@ -234,20 +286,48 @@ function TicketRow({ ticket, summary, expanded, loading, error, onToggleSummary,
           <Button variant="ghost" size="sm" onClick={onToggleSummary} disabled={loading}>
             {loading ? '⏳' : summary ? <X className="size-4" /> : <Sparkles className="size-4" />}
           </Button>
+          <Button variant="ghost" size="sm" onClick={onToggleRisk} disabled={loadingRisk}>
+            {loadingRisk ? '⏳' : risk ? <X className="size-4" /> : <ShieldAlert className="size-4" />}
+          </Button>
           <Button variant="ghost" size="sm" onClick={onTogglePin}>
             {isPinnedItem ? <Star className="size-4 fill-yellow-400 text-yellow-400" /> : <Pin className="size-4" />}
           </Button>
         </TableCell>
       </TableRow>
-      {summary && expanded && (
+      {(summary || risk) && expanded && (
         <TableRow>
           <TableCell colSpan={8} className="bg-muted/50 px-4 py-3">
             <div className="flex flex-col gap-2 text-xs">
-              <div><strong>Ringkasan:</strong> {summary.summary}</div>
-              <div className="flex gap-4">
-                <span><strong>Risiko:</strong> <RiskBadge level={summary.riskLevel} /></span>
-                <span><strong>Kategori:</strong> {summary.category}</span>
-              </div>
+              {summary && (
+                <>
+                  <div><strong>Ringkasan:</strong> {summary.summary}</div>
+                  <div className="flex gap-4">
+                    <span><strong>Risiko:</strong> <RiskBadge level={summary.riskLevel} /></span>
+                    <span><strong>Kategori:</strong> {summary.category}</span>
+                  </div>
+                </>
+              )}
+              {risk && (
+                <div className={`${summary ? 'mt-2 border-t pt-2' : ''} text-xs`}>
+                  <div className="flex items-center gap-2">
+                    <strong>Skor risiko:</strong>
+                    <span>{risk.riskScore}/100</span>
+                    <RiskBadge level={risk.riskLevel} />
+                  </div>
+                  {risk.flaggedFactors.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {risk.flaggedFactors.map((f, i) => (
+                        <span key={`${f.factor}-${i}`} className="text-yellow-700 dark:text-yellow-300">• {f.factor}</span>
+                      ))}
+                    </div>
+                  )}
+                  {risk.recommendedMitigations.length > 0 && (
+                    <div className="mt-1 text-green-700 dark:text-green-300">
+                      💡 {risk.recommendedMitigations.join(' ')}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </TableCell>
         </TableRow>
@@ -260,19 +340,5 @@ function TicketRow({ ticket, summary, expanded, loading, error, onToggleSummary,
         </TableRow>
       )}
     </>
-  );
-}
-
-function RiskBadge({ level }: { level: 'low' | 'medium' | 'high' }) {
-  const colors = {
-    low: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    high: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  };
-  const labels = { low: 'Rendah', medium: 'Sedang', high: 'Tinggi' };
-  return (
-    <span className={`inline-flex items-center rounded-md px-2 py-0.5 font-medium ${colors[level]}`}>
-      {labels[level]}
-    </span>
   );
 }

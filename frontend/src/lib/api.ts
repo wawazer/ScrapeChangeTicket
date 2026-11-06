@@ -75,6 +75,13 @@ export interface AISummary {
   category: string;
 }
 
+export interface RiskAnalysisResult {
+  riskScore: number;
+  riskLevel: 'low' | 'medium' | 'high';
+  flaggedFactors: Array<{ factor: string; source: 'keyword' | 'llm' }>;
+  recommendedMitigations: string[];
+}
+
 
 export interface FilterOption {
   name: string;
