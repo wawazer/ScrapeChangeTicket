@@ -177,7 +177,7 @@ export function TicketsView({ state }: TicketsViewProps) {
                 <TableHead>Assigned to</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Scrape status</TableHead>
-                <TableHead>AI</TableHead>
+                <TableHead>AI Insights</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -6,7 +6,7 @@ diagnostics/
 playwright-report/
 test-results/
 *.log
-AGENTS.md
+# AGENTS.md
 .gitignore
 .tmp/
 reference/
