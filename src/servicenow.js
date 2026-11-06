@@ -6,7 +6,8 @@ import { deduplicateTickets, parseActivities, parseDetailFields, parseTableRows 
 
 export const SELECTORS = {
   frame: 'gsft_main', menu: 'Change - My Change Task', control: '#change_task_control_button',
-  filterItem: 'div.context_item', ticket: 'a.linked.formlink'
+  filterItem: 'div.context_item', ticket: 'a.linked.formlink',
+  crList: 'change_request_list', crControl: '#change_request_control_button'
 };
 
 const ACTION_FILTER_IDS = new Set(['--personal--', '--none--']);
@@ -549,6 +550,62 @@ export class ServiceNowClient {
     } finally {
       await page.close().catch((err) => warn('Gagal menutup tab Change Request', { change: number, message: err.message }));
     }
+  }
+
+  async readChangeRequestList() {
+    const listUrl = new URL('/now/nav/ui/classic/params/target/change_request_list.do', this.options.baseUrl);
+    listUrl.searchParams.set('sysparm_query', 'typeINNormal_Major');
+    listUrl.searchParams.set('sysparm_list_header_search', 'true');
+    await this.page.goto(listUrl.href, { waitUntil: 'domcontentloaded' });
+    this.listUrl = this.page.url();
+    return this.readTablePage();
+  }
+
+  async readAllChangeRequests({ maxPages = 100 } = {}) {
+    await this.goToFirstPage({ maxPages });
+    const result = [];
+    const seen = new Set();
+    let pageCount = 0;
+    while (pageCount < maxPages) {
+      const page = await this.readTablePage();
+      if (seen.has(page.signature)) break;
+      seen.add(page.signature);
+      pageCount += 1;
+      result.push(...page.tickets);
+      if (!page.next) break;
+      const frame = await this.frame();
+      if (!(await this.clickPagination(frame, 'next'))) break;
+      if (!(await this.waitForPageChange(page.signature))) break;
+    }
+    const unique = deduplicateTickets(result);
+    info('Seluruh halaman Change Request selesai dibaca', { pages: pageCount, requests: unique.length });
+    return { tickets: unique, pages: pageCount };
+  }
+
+  async scrapeChangeRequestDetail(row) {
+    info('Membuka detail Change Request', { request: row.nomor_tiket });
+    await this.openTicket(row);
+    const frame = await this.frame();
+    const snapshot = await frame.locator('body').evaluate(() => {
+      const fields = {};
+      const inputValue = (selectors) => {
+        const input = selectors.map((selector) => document.querySelector(selector)).find(Boolean);
+        return (input?.getAttribute('value') || input?.value || '').trim() || '-';
+      };
+      for (const element of document.querySelectorAll('input, textarea, select')) {
+        const group = element.closest('.form-group, .form-field, .sn-form-row, .field, td') || element.parentElement;
+        const label = group?.querySelector('label, .label, th')?.innerText?.trim() || element.name || element.id || '';
+        let value = element.tagName === 'SELECT' ? element.selectedOptions[0]?.textContent?.trim() || element.value : (element.value ?? '');
+        if (value) fields[label] = value;
+      }
+      const number = inputValue(['input[name="change_request.number"]', 'input[id="change_request.number"]']);
+      const description = document.querySelector('textarea[name="change_request.description"]')?.innerHTML || '';
+      return { fields, number, descriptionHtml: description };
+    });
+    const detail = parseDetailFields(snapshot);
+    detail.nomor_tiket = row.nomor_tiket;
+    info('Detail Change Request selesai', { request: row.nomor_tiket });
+    return { detail, activities: [], activities_status: 'success', activities_error: null };
   }
 
   async diagnose(filePath = `diagnostics/servicenow-${Date.now()}.html`) {

@@ -240,6 +240,59 @@ app.get('/api/export/excel', async (req, res) => {
     res.download(file, path.basename(file));
   } catch (err) { error('Ekspor Excel gagal', { message: err.message }); res.status(500).json({ error: err.message }); }
 });
+app.get('/api/requests', async (_req, res) => {
+  try {
+    const client = await ensureClient();
+    const snapshot = await client.readChangeRequestList();
+    res.json({ ok: true, tickets: snapshot.tickets, total: snapshot.total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/requests/all', async (_req, res) => {
+  try {
+    const client = await ensureClient();
+    const result = await client.readAllChangeRequests({ maxPages: 100 });
+    res.json({ ok: true, tickets: result.tickets, pages: result.pages });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/requests/:number/detail', async (req, res) => {
+  try {
+    const client = await ensureClient();
+    const detail = await client.scrapeChangeRequestDetail({ nomor_tiket: req.params.number });
+    res.json({ ok: true, detail: detail.detail, activities: detail.activities });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/requests/:number/summary', async (req, res) => {
+  try {
+    const { number } = req.params;
+    const cached = state.aiSummaries.get(number);
+    if (cached) return res.json({ ok: true, data: cached });
+    const client = await ensureClient();
+    const snapshot = await client.readChangeRequestList();
+    const ticket = snapshot.tickets.find((t) => t.nomor_tiket === number);
+    if (!ticket) return res.status(404).json({ error: 'Change Request tidak ditemukan' });
+    const detail = await client.scrapeChangeRequestDetail(ticket);
+    const result = await summarizeTicket({
+      description: String(detail.detail.deskripsi_permasalahan || ''),
+      assignedTo: String(detail.detail.ditugaskan_kepada || detail.detail.pic || ''),
+      changeRequest: number,
+    });
+    state.aiSummaries.set(number, result);
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    error('AI Summary Change Request gagal', { message: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/tickets/:number/summary', async (req, res) => {
   try {
     const { number } = req.params;

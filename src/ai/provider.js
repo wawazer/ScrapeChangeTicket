@@ -26,6 +26,18 @@ const PROVIDERS = {
     model: 'llama3.2',
     modelEnv: 'OLLAMA_MODEL',
   },
+  deepseek: {
+    endpoint: 'https://api.deepseek.com/chat/completions',
+    model: 'deepseek-chat',
+    apiKeyEnv: 'DEEPSEEK_API_KEY',
+    modelEnv: 'DEEPSEEK_MODEL',
+  },
+  openrouter: {
+    endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+    model: 'meta-llama/llama-3.1-8b-instruct:free',
+    apiKeyEnv: 'OPENROUTER_API_KEY',
+    modelEnv: 'OPENROUTER_MODEL',
+  },
 };
 
 function pickProvider(name) {
@@ -103,3 +115,5 @@ export function extractJson(text) {
   const match = candidate.match(/\{[\s\S]*\}/);
   return match ? match[0] : null;
 }
+
+export { PROVIDERS };
