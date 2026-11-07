@@ -66,7 +66,7 @@ test('prefers display values over sys_id values in report mapping', () => {
   const report = reportTicket({ nomor_tiket: 'CTASK0001', data_tabel: { change_request: 'CHG0005654', ditugaskan_kepada: 'Mohamad Romli', configuration_item: 'PICO (ICOFR)' }, detail_tiket: { change_request: 'b960642693634710cbd5f6fa2bba1075', ditugaskan_kepada: '2713c04e0f9b52006872c5ece1050e05', configuration_item: '5e3012cd932b6a90cbd5f6fa2bba1087' } });
   assert.equal(report.change, 'CHG0005654');
   assert.equal(report.pic, 'Mohamad Romli');
-  assert.equal(report.application, '-');
+  assert.equal(report.application, 'PICO (ICOFR)');
   assert.equal(isSysId('b960642693634710cbd5f6fa2bba1075'), true);
 });
 
