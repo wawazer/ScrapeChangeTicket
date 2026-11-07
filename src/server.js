@@ -32,6 +32,9 @@ function addLog(message, level = 'info') {
 
 const BUSY_STATUSES = ['starting', 'reading', 'running', 'paused'];
 
+const hasUsefulValue = (value) => value !== undefined && value !== null && !['', '-'].includes(String(value).trim());
+const firstUseful = (...values) => values.find(hasUsefulValue) ?? '-';
+
 function successfulTickets() {
   return state.run ? state.run.tickets.filter((ticket) => ticket.scrape_status === 'success') : [];
 }
@@ -106,13 +109,13 @@ async function runScrape({ limit = 0, includeScreenshot = false } = {}) {
         }
         detail = {
           ...result.detail,
-          requestor: changeData.picRequester || detail.requestor || '-',
-          location: changeData.entity || detail.location || '-',
-          application: changeData.serviceOffering || detail.application || '-',
+          requestor: firstUseful(changeData.picRequester, detail.requestor),
+          location: firstUseful(changeData.entity, detail.location),
+          application: firstUseful(changeData.serviceOffering, detail.application),
           // Popup PIC requester memakai camelCase; laporan memakai snake_case.
-          contact: changeData.contact || detail.contact || '-',
-          email: changeData.email || detail.email || '-',
-          nipp_nrk: changeData.nippNrk || changeData.nipp_nrk || detail.nipp_nrk || '-',
+          contact: firstUseful(changeData.contact, detail.contact),
+          email: firstUseful(changeData.email, detail.email),
+          nipp_nrk: firstUseful(changeData.nippNrk, changeData.nipp_nrk, detail.nipp_nrk, detail.nipp, detail.nrk),
           change_data: changeData
         };
       }
