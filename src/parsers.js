@@ -2,7 +2,7 @@ import { cleanText, ticketNumber, uniqueBy } from './utils.js';
 
 const aliases = {
   nomor_tiket: ['no tiket', 'nomor tiket', 'ticket number', 'number', 'no ticket', 'task number'],
-  created: ['created', 'dibuat', 'tiket dibuat', 'created on'],
+  created: ['created', 'dibuat', 'tiket dibuat', 'created on', 'created at', 'sys created on', 'opened at'],
   change_request: ['change request', 'request perubahan'],
   judul_task: ['judul task', 'task title', 'short description', 'title'],
   judul_permasalahan: ['judul permasalahan', 'problem title', 'problem statement', 'issue title'],
@@ -17,18 +17,39 @@ const aliases = {
   prioritas: ['prioritas', 'priority'],
   start_date: ['start date', 'tanggal mulai'],
   end_date: ['end date', 'tanggal selesai'],
-  requestor: ['requestor', 'requested by', 'pemohon'],
-  nipp_nrk: ['nipp/nrk', 'nipp nrk', 'nipp', 'nrk'],
-  contact: ['contact', 'kontak', 'phone', 'telephone'],
-  email: ['email', 'e-mail'],
-  location: ['location', 'lokasi'],
-  application: ['application', 'aplication', 'aplikasi'],
+  requestor: ['requestor', 'requested by', 'requested for', 'requester', 'pemohon', 'u requestor', 'opened by'],
+  nipp_nrk: ['nipp/nrk', 'nipp nrk', 'nipp', 'nrk', 'u nipp', 'u nrk', 'u nipp nrk', 'employee number'],
+  contact: ['contact', 'kontak', 'phone', 'telephone', 'mobile phone', 'mobile', 'u contact'],
+  email: ['email', 'e-mail', 'u email'],
+  location: ['location', 'lokasi', 'u location'],
+  application: ['application', 'aplication', 'aplikasi', 'u application'],
   change: ['change', 'change request', 'request perubahan'],
   ip_address_server: ['ip address server', 'server ip', 'ip address'],
   version: ['version', 'versi'],
   directory: ['directory', 'direktori', 'path'],
   cause: ['cause', 'penyebab'],
   action_plan: ['action plan', 'rencana tindakan']
+};
+
+// Alternate keys used by ServiceNow forms/imports and by older saved runs.
+// reportTicket() checks these when the canonical key is missing so the PDF and
+// Excel exports never render an empty cell for data that is actually present.
+const reportAliases = {
+  date: ['date', 'created', 'created_at', 'sys_created_on', 'opened_at', 'start_date'],
+  change_request: ['change', 'change_request'],
+  requestor: ['requestor', 'u_requestor', 'opened_by', 'requested_by', 'pemohon', 'picRequester'],
+  nipp_nrk: ['nipp_nrk', 'nipp', 'nrk', 'u_nipp', 'u_nrk', 'u_nipp_nrk', 'nippNrk', 'employee_number'],
+  contact: ['contact', 'u_contact', 'phone', 'mobile_phone', 'telephone', 'kontak'],
+  email: ['email', 'u_email', 'e_mail'],
+  location: ['location', 'u_location', 'entity', 'lokasi'],
+  application: ['application', 'u_application', 'configuration_item', 'ci', 'service_offering', 'serviceOffering', 'aplikasi'],
+  change: ['change', 'change_request'],
+  ip_address_server: ['ip_address_server', 'u_ip_address_server'],
+  version: ['version', 'u_version'],
+  directory: ['directory', 'u_directory'],
+  pic: ['pic', 'ditugaskan_kepada', 'assigned_to'],
+  cause: ['cause', 'u_cause'],
+  action_plan: ['action_plan', 'u_action_plan']
 };
 
 const normalizeLabel = (value) => cleanText(value).toLowerCase().replace(/[.:/()_-]+/g, ' ').replace(/\s+/g, ' ');
@@ -183,11 +204,19 @@ export function validateExportData(data) {
 export function reportTicket(ticket, overrides = {}) {
   const detail = ticket.detail_tiket || {};
   const table = ticket.data_tabel || {};
+  const changeData = detail.change_data || ticket.change_data || {};
+  // Most specific sources first: explicit export overrides, scraped detail,
+  // parent Change Request data, list-table data, then a flattened ticket.
+  const sources = [overrides, detail, changeData, table, ticket];
   const value = (key, ...fallbacks) => {
-    const changeField = { requestor: 'picRequester', location: 'entity', application: 'serviceOffering', nipp_nrk: 'nippNrk' }[key];
-    const candidates = [overrides[key], detail[key], detail.change_data?.[key], detail.change_data?.[changeField], table[key], ...fallbacks.flatMap((fallback) => [detail[fallback], table[fallback]])];
-    const result = candidates.find((item) => hasUsefulValue(item) && !isSysId(item));
-    return result === undefined ? '-' : cleanText(result) || '-';
+    const names = [...new Set([key, ...(reportAliases[key] || []), ...fallbacks])];
+    for (const source of sources) {
+      for (const name of names) {
+        const item = source?.[name];
+        if (hasUsefulValue(item) && !isSysId(item)) return cleanText(item) || '-';
+      }
+    }
+    return '-';
   };
   const change = value('change', 'change_request');
   const rawDescription = overrides.description ?? detail.deskripsi_permasalahan_text ?? (htmlToText(detail.deskripsi_permasalahan_html || '') || '-');
