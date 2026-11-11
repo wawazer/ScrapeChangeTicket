@@ -181,7 +181,7 @@ export function ReportsView({ state }: ReportsViewProps) {
           <div>
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <CopyCheck className="size-5 text-primary" />
-              Deteksi Duplikasi & Insiden Berulang (Phase 3 AI)
+              Deteksi Duplikasi & Insiden Berulang
             </CardTitle>
             <CardDescription className="text-xs mt-1">
               Bandingkan semantik tiket target dengan tiket historis pada CI/Aplikasi terkait.
