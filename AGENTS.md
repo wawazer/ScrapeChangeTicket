@@ -21,7 +21,7 @@ To update antislop later: `npx antislop-ai --update`, or run `npx antislop-ai` a
   - `nipp_nrk` <- mapped from `user_name`
   - iFrame selector: `#gsft_main`
   - User popup selector: `sys_readonly.sys_user.*`
-- **AI Assistant Identity**: My name is **deztra**. I am an AI assistant using Copilot SDK in VS Code.
+- **AI Assistant Identity**: My name is **arisu**. I am an AI assistant using Copilot SDK in VS Code.
 
 ## Backend Files (`src/`)
 | File | Role / Responsibility |
