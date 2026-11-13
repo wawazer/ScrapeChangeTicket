@@ -51,3 +51,10 @@ To update antislop later: `npx antislop-ai --update`, or run `npx antislop-ai` a
 | `frontend/src/views/reports-view.tsx` | PDF & Excel report generator controls |
 | `frontend/src/views/settings-view.tsx` | ServiceNow credentials, timeouts, AI provider configuration |
 
+## Scripts (`scripts/`)
+| File | Role / Responsibility |
+|---|---|
+| `scripts/banner.js` | ZEVN TUI ASCII gradient banner — printed on dev/start/install/git-pull |
+| `scripts/setup-hooks.js` | Auto-installs `.git/hooks/post-merge` to trigger banner on `git pull` |
+| `scripts/check-memory-sync.js` | Validates AGENTS.md matches actual codebase files |
+
