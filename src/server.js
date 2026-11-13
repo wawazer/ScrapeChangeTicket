@@ -12,6 +12,7 @@ import { validateTicketData } from './parsers.js';
 import { summarizeTicket } from './ai/summary.js';
 import { analyzeRisk } from './ai/analysis.js';
 import { detectDuplicates } from './ai/duplicate.js';
+import { printBanner } from '../scripts/banner.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -362,5 +363,8 @@ app.post('/api/ai/detect-duplicates', async (req, res) => {
 });
 app.get('*', (_req, res) => res.sendFile(path.join(root, '..', 'public', 'index.html')));
 
-if (process.env.NO_SERVER !== 'true') app.listen(config.port, () => info(`Aplikasi berjalan di http://localhost:${config.port}`));
+if (process.env.NO_SERVER !== 'true') {
+  if (process.env.NODE_ENV !== 'test') printBanner();
+  app.listen(config.port, () => info(`Aplikasi berjalan di http://localhost:${config.port}`));
+}
 export { app, state, runScrape };
