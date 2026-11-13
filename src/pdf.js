@@ -136,7 +136,9 @@ function describeRows(doc, data) {
   const requestorLines = wrap(doc, display(data.requestor), textRowSpec.requestor.width);
   const emailLines = wrap(doc, display(data.email), textRowSpec.email.width);
   const ipLines = wrap(doc, 'IP Address Server', ipWidth);
-  const descriptionLines = wrap(doc, display(data.description), textRowSpec.description.width);
+  // Description row = CTASK title; fall back to the long text only when the title is missing.
+  const descriptionValue = data.title && data.title !== '-' ? data.title : data.description;
+  const descriptionLines = wrap(doc, display(descriptionValue), textRowSpec.description.width);
   const causeLines = wrap(doc, display(data.cause), textRowSpec.cause.width);
   const actionLines = wrap(doc, display(data.action_plan), textRowSpec.action.width);
   return {
@@ -287,7 +289,9 @@ function drawTablePage(doc, data, ticket, evidencePath, tableTop, segments) {
   line(doc, x1, tableTop, x1, bottom, borderWidth, borderOffset);
   doc.restore();
 
-  const labelWidth = x1 - layout.text.pad - layout.text.left;
+  // Labels wrap inside the label column without the right padding so
+  // "Description" stays on one line instead of breaking into "Descriptio\nn".
+  const labelWidth = x1 - layout.text.left;
   const fullValueWidth = x4 - layout.text.pad - layout.text.value;
   const splitWidth = x2 - layout.text.pad - layout.text.value;
 

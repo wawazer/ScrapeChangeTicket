@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { deduplicateTickets, htmlToText, isSysId, makeMetadata, mapColumns, parseActivities, parseDetailFields, parseStatus, parseTableRows, reportTicket, validateExportData, validateTicketData } from '../../src/parsers.js';
+import { deduplicateTickets, extractPic, htmlToText, isSysId, makeMetadata, mapColumns, parseActivities, parseDetailFields, parseStatus, parseTableRows, reportTicket, validateExportData, validateTicketData } from '../../src/parsers.js';
 
 test('maps columns by label and ignores reordered columns', () => {
   const mapping = mapColumns(['Selector', 'Tipe Task', 'Nomor Tiket', 'Judul Permasalahan', 'Status']);
@@ -105,6 +105,45 @@ test('maps Change Request popup contact, email and NIPP into report fields', () 
 test('converts a ServiceNow state code using the selected option label', () => {
   const detail = parseDetailFields({ fields: { status: { value: '3', text: '3' } }, statusOptions: { '3': 'Closed' } });
   assert.deepEqual(detail.status, { kode: '3', nama: 'Closed' });
+});
+
+test('extracts PIC from the description text and prefers it over assigned_to', () => {
+  const report = reportTicket({
+    nomor_tiket: 'CTASK0016800',
+    data_tabel: { ditugaskan_kepada: 'Mohamad Romli' },
+    detail_tiket: {
+      pic: 'Mohamad Romli',
+      deskripsi_permasalahan_text: 'commit f2c3d570: Fix Form User Alert\n\nPIC: MOHAMAD ROFIUL IBAD'
+    }
+  });
+  assert.equal(report.pic, 'MOHAMAD ROFIUL IBAD');
+  assert.equal(extractPic('PIC Request:   ALIF PRASETYO AJI  '), 'ALIF PRASETYO AJI');
+  assert.equal(extractPic('PIC : Delfan'), 'Delfan');
+});
+
+test('falls back to the pic field when the description has no PIC line', () => {
+  const report = reportTicket({
+    nomor_tiket: 'CTASK0016801',
+    data_tabel: {},
+    detail_tiket: { pic: 'Mohamad Romli', deskripsi_permasalahan_text: 'commit 300dabe1: Merged PR 751' }
+  });
+  assert.equal(report.pic, 'Mohamad Romli');
+  assert.equal(extractPic('commit 300dabe1: Merged PR 751'), '');
+});
+
+test('uses the CTASK title for the PDF description row instead of the long text', () => {
+  const ticket = {
+    nomor_tiket: 'CTASK0016802',
+    data_tabel: { judul_task: 'Fix Form User Alert' },
+    detail_tiket: {
+      judul_task: 'Fix Form User Alert',
+      deskripsi_permasalahan_text: 'commit f2c3d570 (https://git.example/commit/f2c3d570): Fix Form User Alert'
+    }
+  };
+  const report = reportTicket(ticket);
+  assert.equal(report.title, 'Fix Form User Alert');
+  assert.match(report.description, /commit f2c3d570/);
+  assert.equal(reportTicket({ nomor_tiket: 'CTASK0016803', data_tabel: {}, detail_tiket: {} }).title, '-');
 });
 
 test('actual twenty-ticket fixture preserves ticket identity and display mappings', async () => {

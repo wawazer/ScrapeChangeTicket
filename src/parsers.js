@@ -151,6 +151,19 @@ export function isSysId(value) {
   return sysIdPattern.test(cleanText(value));
 }
 
+// Request PIC is usually written inside the description text ("PIC: NAMA" or
+// "PIC Request: NAMA") while the pic/assigned_to fields hold the Change owner.
+const picPattern = /\bPIC(?:\s*Request)?\s*[:\-]\s*([^\n\r]+)/i;
+
+export function extractPic(...values) {
+  for (const value of values) {
+    const match = String(value ?? '').match(picPattern);
+    const name = match ? cleanText(match[1]).replace(/^[-–—]\s*/, '') : '';
+    if (name && !isSysId(name)) return name;
+  }
+  return '';
+}
+
 export function validateTicketData(ticket = {}) {
   const errors = [];
   const warnings = [];
@@ -222,6 +235,9 @@ export function reportTicket(ticket, overrides = {}) {
   const rawDescription = overrides.description ?? detail.deskripsi_permasalahan_text ?? (htmlToText(detail.deskripsi_permasalahan_html || '') || '-');
   // Older scrapes stored escaped HTML as text; strip it for report rendering only.
   const description = /<\/?[a-z][^>]*>/i.test(String(rawDescription)) ? (htmlToText(String(rawDescription)) || '-') : rawDescription;
+  // PDF "Description" shows the CTASK title, not the long commit log.
+  const title = value('judul_task', 'short_description', 'title');
+  const picRequest = extractPic(detail.deskripsi_permasalahan_text, detail.deskripsi_permasalahan, description);
   return {
     date: value('date', 'created'),
     ticket_number: ticket.nomor_tiket,
@@ -235,7 +251,8 @@ export function reportTicket(ticket, overrides = {}) {
     ip_address_server: value('ip_address_server'),
     version: value('version'),
     directory: value('directory'),
-    pic: value('pic', 'ditugaskan_kepada'),
+    pic: picRequest || value('pic', 'ditugaskan_kepada'),
+    title,
     description,
     result: overrides.result ?? detail.result ?? ticket.report?.result ?? 'Other',
     cause: value('cause'),

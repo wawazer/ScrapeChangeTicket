@@ -21,6 +21,9 @@ To update antislop later: `npx antislop-ai --update`, or run `npx antislop-ai` a
   - `nipp_nrk` <- mapped from `user_name`
   - iFrame selector: `#gsft_main`
   - User popup selector: `sys_readonly.sys_user.*`
+- **Report mapping rules (PDF/Excel via `reportTicket()`)**:
+  - `PIC` <- name extracted from the ticket description text (`PIC: NAMA` / `PIC Request: NAMA`, via `extractPic()`), fallback `pic` / `assigned_to`
+  - `Description` (PDF row) <- CTASK title (`judul_task` / `short_description`), fallback to the long description text when the title is empty
 - **AI Assistant Identity**: My name is **arisu**. I am an AI assistant using Copilot SDK in VS Code.
 
 ## Backend Files (`src/`)

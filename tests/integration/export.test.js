@@ -49,7 +49,8 @@ test('a long ticket continues on additional pages without truncating its fields'
   const { pages, numPages, sizes } = await pdfText(output);
   assert.ok(numPages >= 2, `expected continuation pages, got ${numPages}`);
   const text = pages.join(' ');
-  assert.match(text, /Langkah verifikasi 90/);
+  assert.match(text, /Description\s+Development/);
+  assert.doesNotMatch(text, /Langkah verifikasi/);
   assert.match(text, /Penyebab 40/);
   assert.match(text, /Lanjutan tiket CTASK0016973/);
   for (const size of sizes) assert.deepEqual(size, [612, 792]);
@@ -59,8 +60,8 @@ test('one oversized ticket does not stop the rest of the batch', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'pelindo-batch-'));
   const output = path.join(directory, 'batch.pdf');
   const run = createRun('CTASK SEPTEMBER');
-  upsertTicket(run, ticket('CTASK0016973', { deskripsi_permasalahan_text: 'Panjang '.repeat(1500) }));
-  upsertTicket(run, ticket('CTASK0016974', { deskripsi_permasalahan_text: 'Normal ticket' }));
+  upsertTicket(run, ticket('CTASK0016973', { cause: 'Panjang '.repeat(1500) }));
+  upsertTicket(run, ticket('CTASK0016974', { judul_task: 'Normal ticket' }));
   await generatePdf(run, output, { period: 'September 2026' });
   const { pages } = await pdfText(output);
   const text = pages.join(' ');
