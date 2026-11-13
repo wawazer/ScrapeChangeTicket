@@ -5,6 +5,7 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [tailwindcss(), react()],
+  clearScreen: false,
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
