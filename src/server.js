@@ -12,12 +12,36 @@ import { validateTicketData } from './parsers.js';
 import { summarizeTicket } from './ai/summary.js';
 import { analyzeRisk } from './ai/analysis.js';
 import { detectDuplicates } from './ai/duplicate.js';
+import { deactivateLicense, verifyLicenseOnline } from './license.js';
 import { printBanner } from '../scripts/banner.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json({ limit: '4mb' }));
 app.use(express.static(path.join(root, '..', 'public')));
+
+async function requireValidLicense(_req, res, next) {
+  try {
+    const result = await verifyLicenseOnline();
+    if (result.valid) return next();
+    return res.status(403).json({ error: 'LICENSE_REQUIRED', reason: result.reason, message: result.message, deviceId: result.deviceId, hostname: result.hostname });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// Playwright and AI endpoints stay locked; the SPA shell and license routes stay reachable.
+const LICENSE_GATED_PREFIXES = ['/api/scrape', '/api/ai', '/api/session', '/api/login', '/api/filters', '/api/estimate', '/api/requests', '/api/tickets'];
+app.use((req, res, next) => (LICENSE_GATED_PREFIXES.some((prefix) => req.path.startsWith(prefix)) ? requireValidLicense(req, res, next) : next()));
+
+app.get('/api/license/status', async (_req, res) => res.json(await verifyLicenseOnline()));
+app.post('/api/license/activate', async (req, res) => {
+  const licenseKey = String(req.body?.licenseKey || '').trim();
+  if (!licenseKey) return res.status(400).json({ valid: false, reason: 'NO_LICENSE', message: 'License key wajib diisi.' });
+  const result = await verifyLicenseOnline(licenseKey);
+  return res.status(result.valid ? 200 : 403).json(result);
+});
+app.post('/api/license/deactivate', (_req, res) => { deactivateLicense(); res.json({ ok: true }); });
 
 const state = {
   client: null, filters: [], selectedFilter: '', estimate: 0, run: null, runFile: '',

@@ -3,6 +3,7 @@ node_modules/
 .env.example
 output/
 diagnostics/
+.zevn-license.json
 playwright-report/
 test-results/
 *.log

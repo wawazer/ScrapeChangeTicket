@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { LayoutDashboard, TextSearch, Database, History, FileText, Settings } from 'lucide-react';
+import { useLicense } from '@/components/license-gate';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export type ViewId = 'dashboard' | 'scrape' | 'tickets' | 'history' | 'reports' | 'settings';
@@ -27,6 +29,7 @@ interface SidebarProps {
 
 export function Sidebar({ view, onViewChange, connected }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { license, deactivate } = useLicense();
 
   useEffect(() => {
     setMobileOpen(false);
@@ -103,6 +106,21 @@ export function Sidebar({ view, onViewChange, connected }: SidebarProps) {
             />
             <span>{connected ? 'Browser terhubung' : 'Browser belum dibuka'}</span>
           </div>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-sidebar-border px-2 py-2">
+          <p className="text-xs leading-snug">
+            <span className="text-muted-foreground">Licensed to </span>
+            <span className="font-medium">{license.owner || '-'}</span>
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-muted-foreground hover:text-foreground"
+            onClick={() => void deactivate()}
+          >
+            Deactivate
+          </Button>
         </div>
       </aside>
     </>

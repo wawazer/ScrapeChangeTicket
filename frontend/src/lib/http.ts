@@ -1,3 +1,15 @@
+export class ApiError extends Error {
+  status: number;
+  body: Record<string, unknown>;
+
+  constructor(message: string, status: number, body: Record<string, unknown>) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.body = body;
+  }
+}
+
 export async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     headers: {
@@ -6,9 +18,38 @@ export async function request<T>(url: string, options: RequestInit = {}): Promis
     },
     ...options,
   });
-  const data = (await response.json().catch(() => ({}))) as { error?: string } & T;
-  if (!response.ok) throw new Error(data.error || 'Permintaan gagal');
+  const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string } & T;
+  if (!response.ok) {
+    // LicenseGate listens for this and locks the workspace back to the activation screen.
+    if (data.error === 'LICENSE_REQUIRED') window.dispatchEvent(new Event('zevn:license-required'));
+    throw new ApiError(data.message || data.error || 'Permintaan gagal', response.status, data);
+  }
   return data;
+}
+
+export interface LicenseStatus {
+  valid: boolean;
+  owner?: string;
+  hostname?: string;
+  deviceId?: string;
+  reason?: string;
+  message?: string;
+}
+
+export function fetchLicenseStatus() {
+  return request<LicenseStatus>('/api/license/status');
+}
+
+export async function activateLicense(licenseKey: string): Promise<LicenseStatus> {
+  try {
+    return await request<LicenseStatus>('/api/license/activate', {
+      method: 'POST',
+      body: JSON.stringify({ licenseKey }),
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.body.valid === false) return error.body as unknown as LicenseStatus;
+    throw error;
+  }
 }
 
 export async function downloadFile(url: string, options: RequestInit, filename: string) {

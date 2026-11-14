@@ -36,6 +36,7 @@ To update antislop later: `npx antislop-ai --update`, or run `npx antislop-ai` a
 | `src/utils.js` | Date formatting, string cleaners, sleep helpers |
 | `src/parsers.js` | DOM table extraction and ticket field normalization |
 | `src/servicenow.js` | Playwright browser automation for ServiceNow ticket scraping |
+| `src/license.js` | License key + hardware device binding verified against zevn.web.id |
 | `src/pdf.js` | PDF patch release report generation (PDFKit) |
 | `src/excel.js` | Excel export generator with custom styling (ExcelJS) |
 | `src/ai/provider.js` | Multi-provider LLM client dispatcher (Groq, Gemini, Ollama, DeepSeek, OpenRouter) |
