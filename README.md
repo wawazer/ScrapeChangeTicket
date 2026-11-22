@@ -1,567 +1,297 @@
 # ScrapeChangeTicket
 
 <p align="center">
-  <strong>ServiceNow Automation · Data Extraction · Reporting</strong>
+  <strong>ServiceNow Change Task scraping, review, and reporting</strong>
 </p>
 
 <p align="center">
-  Node.js · Playwright · React 19 · TypeScript · Tailwind CSS · PDF · Excel · JSON
+  Node.js · Express · Playwright · React 19 · TypeScript · Tailwind CSS · PDFKit · ExcelJS
 </p>
 
 <p align="center">
-  <a href="#-overview">Overview</a> ·
-  <a href="#-architecture">Architecture</a> ·
-  <a href="#-installation">Installation</a> ·
-  <a href="#-usage">Usage</a> ·
-  <a href="#-api-reference">API Reference</a> ·
-  <a href="#-testing">Testing</a>
+  <a href="#overview">Overview</a> ·
+  <a href="#installation">Installation</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#running">Running</a> ·
+  <a href="#api-reference">API Reference</a> ·
+  <a href="#releases">Releases</a>
 </p>
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#-overview)
-2. [Core Features](#-core-features)
-3. [System Architecture](#-architecture)
-4. [Technology Stack](#-technology-stack)
-5. [Prerequisites](#-prerequisites)
-6. [Installation](#-installation)
-7. [Environment Configuration](#-environment-configuration)
-8. [Running the Application](#-running-the-application)
-9. [Application Workflow](#-application-workflow)
-10. [Scraping Engine](#-scraping-engine)
-11. [Data Structure](#-data-structure)
-12. [Export Engine](#-export-engine)
-13. [API Reference](#-api-reference)
-14. [Project Structure](#-project-structure)
-15. [Testing and Quality Assurance](#-testing)
-16. [Debugging and Troubleshooting](#-debugging)
-17. [Security](#-security)
-18. [Developer Workflow](#-developer-workflow)
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Architecture](#architecture)
+4. [Technology Stack](#technology-stack)
+5. [Requirements](#requirements)
+6. [Installation](#installation)
+7. [Configuration](#configuration)
+8. [Running](#running)
+9. [Workflow](#workflow)
+10. [Scraping Behavior](#scraping-behavior)
+11. [Data Shape](#data-shape)
+12. [Reporting](#reporting)
+13. [AI Features](#ai-features)
+14. [License Gate](#license-gate)
+15. [API Reference](#api-reference)
+16. [Project Structure](#project-structure)
+17. [Testing](#testing)
+18. [Troubleshooting](#troubleshooting)
+19. [Releases](#releases)
 
 ---
 
-## 1. Overview
+## Overview
 
-ScrapeChangeTicket is a web-based automation application designed to extract, process, organize, and export Change Task records from ServiceNow.
+ScrapeChangeTicket reads Change Task records from a ServiceNow instance, normalizes them,
+keeps them in a single run dataset, and turns that dataset into a patch release report
+(PDF), a styled workbook (XLSX), or a JSON file. A React dashboard drives the whole flow:
+session start, filter selection, scrape progress, ticket review, AI summary, and export.
 
-The application combines browser automation, structured data extraction, and automated document generation in a single workflow.
-
-### Primary objectives
-
-- Automate ServiceNow ticket collection.
-- Retrieve records using existing ServiceNow filters.
-- Process multiple result pages through pagination.
-- Extract ticket details and activity records.
-- Normalize extracted information into structured JSON.
-- Generate standardized PDF reports.
-- Generate Excel workbooks for further analysis.
-
-### Processing overview
-
-| Input | Processing | Output |
-|---|---|---|
-| ServiceNow session | Browser automation | Authenticated session |
-| Saved filter | Filter discovery | Filter selection |
-| Ticket list | Pagination and extraction | Ticket records |
-| Ticket detail | Field parsing | Structured data |
-| Activities | Activity extraction | Activity records |
-| Scraping dataset | PDF generator | PDF report |
-| Scraping dataset | Excel generator | XLSX workbook |
-| Scraping dataset | JSON serialization | JSON file |
+The ServiceNow session is owned by Playwright. Credentials stay on the server and are never
+sent to the browser.
 
 ---
 
-## 2. Core Features
+## Features
 
-### 2.1 ServiceNow Integration
+**Scraping**
+- Starts a Playwright session and waits for the authenticated ServiceNow list.
+- Reads saved list filters, then selects one by name.
+- Estimates the record count of the selected filter.
+- Walks pagination, extracts list rows, then opens each ticket for detail and activity data.
+- Skips tickets already processed in the run, so a resumed scrape does not duplicate records.
+- Stores progress and checkpoints so a long run can be inspected or resumed.
+- Supports pause, resume, and cancel while a run is active.
 
-- Browser session management.
-- Automated login detection.
-- Navigation to Change Task.
-- Dynamic filter discovery.
-- Filter selection.
-- Result estimation.
-- Session status monitoring.
+**Review**
+- Ticket table with filters and a detail drawer.
+- Per-ticket AI summary with risk level and category.
+- Per-ticket AI risk analysis and duplicate detection against the current run.
+- Evidence screenshot upload, attached to selected tickets and embedded in the PDF report.
 
-### 2.2 Scraping Engine
-
-- Table extraction.
-- Multi-page pagination.
-- Ticket detail extraction.
-- Activity extraction.
-- Duplicate prevention.
-- Configurable ticket limit.
-- Progress monitoring.
-- Per-ticket error tracking.
-
-### 2.3 Data Management
-
-- Centralized scraping result.
-- Structured ticket records.
-- Display-value normalization.
-- Scraping history.
-- JSON export.
-- Success and failure statistics.
-
-### 2.4 Reporting Engine
-
-**PDF**
-- Standardized report layout.
-- A4 portrait format.
-- Structured table rendering.
-- Result classification.
-- Long-content pagination.
-- Continuation-page support.
-- Dynamic page numbering.
-
-**Excel**
-- Structured ticket columns.
-- Formatted headers.
-- Freeze panes.
-- Autofilter.
-- Metadata worksheet.
-
-**JSON**
-- Complete scraping metadata.
-- Ticket records.
-- Detail information.
-- Activity records.
-- Error information.
+**Reporting**
+- PDF report per filter, with continuation pages for long Cause and Action Plan text.
+- XLSX workbook with styled headers, freeze panes, autofilter, and a metadata sheet.
+- JSON export of the full run, including metadata and per-ticket scrape status.
 
 ---
 
-## 3. System Architecture
-
-### High-level architecture
+## Architecture
 
 ```mermaid
 flowchart TD
-    A[Web Browser] --> B[Frontend: HTML CSS JavaScript]
-    B --> C[Node.js Application Server]
-    C --> D[ServiceNow Automation]
-    D --> E[Playwright Browser]
-    E --> F[ServiceNow]
-
-    F --> E
-    E --> D
-    D --> G[Data Parser]
-    G --> H[Scraping State]
-
-    H --> I[PDF Generator]
-    H --> J[Excel Generator]
-    H --> K[JSON Export]
-
-    I --> L[PDF File]
-    J --> M[XLSX File]
-    K --> N[JSON File]
+    A[React SPA in public/] -->|fetch /api/*| B[Express server]
+    B --> C[src/servicenow.js Playwright client]
+    C --> D[ServiceNow instance]
+    B --> E[src/parsers.js normalization]
+    B --> F[src/pdf.js PDFKit]
+    B --> G[src/excel.js ExcelJS]
+    B --> H[src/ai provider and analyzers]
+    E --> I[src/store.js run dataset and checkpoints]
+    I --> F
+    I --> G
 ```
-
-### Processing sequence
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant UI as Frontend
-    participant API as Node.js Server
-    participant SN as Playwright / ServiceNow
-    participant DB as Application State
-    participant EX as Export Engine
-
-    User->>UI: Open ServiceNow session
-    UI->>API: Request session
-    API->>SN: Launch browser
-    SN-->>API: Session status
-
-    User->>UI: Refresh filters
-    UI->>API: Request filter list
-    API->>SN: Read available filters
-    SN-->>API: Filter records
-    API-->>UI: Return filters
-
-    User->>UI: Select filter and start
-    UI->>API: Start scraping
-    API->>SN: Read ticket list
-    SN->>SN: Process pagination
-    SN->>SN: Extract ticket details
-    SN-->>API: Extracted records
-
-    API->>DB: Update scraping state
-    DB-->>UI: Progress and summary
-
-    User->>UI: Export PDF / Excel
-    UI->>API: Request export
-    API->>EX: Generate report
-    EX-->>UI: Download file
-```
-
-### Architectural responsibilities
 
 | Component | Responsibility |
 |---|---|
-| Frontend | User interface and interaction |
-| Server | HTTP routing and application orchestration |
-| ServiceNow module | Browser automation and extraction |
-| Parser | Data normalization |
-| PDF module | PDF document generation |
-| Excel module | Spreadsheet generation |
-| Tests | Functional and regression validation |
+| `src/server.js` | Express routes, scrape job orchestration, SPA fallback |
+| `src/servicenow.js` | Login, filter discovery, pagination, detail and activity extraction |
+| `src/parsers.js` | Row parsing, field normalization, metadata, export validation |
+| `src/store.js` | Run object, upsert, checkpoint save and load |
+| `src/pdf.js` / `src/excel.js` | Report generators |
+| `src/license.js` | License key verification and device binding |
+| `src/ai/*` | Provider dispatch, summary, risk analysis, duplicate detection |
+| `frontend/` | React dashboard, built into `public/` |
 
 ---
 
-## 4. Technology Stack
+## Technology Stack
 
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js v24.21.0 (ESM) |
+| Runtime | Node.js v24 (ESM) |
 | Backend | Express ^4.21.2 |
-| Frontend | React ^19.3.1 + TypeScript ~7.0.2 |
-| Build tool | Vite ^8.3.5 |
-| Styling | Tailwind CSS ^4.3.4 (CSS-first) |
-| UI Components | shadcn/ui (Radix UI + Tailwind) |
-| Icons | lucide-react ^1.68.0 |
-| Automation | Playwright ^1.49.1 |
+| Automation | playwright ^1.49.1 |
 | PDF | pdfkit ^0.16.0 |
 | Spreadsheet | exceljs ^4.4.0 |
-| Testing | Node.js Test Runner + Playwright Test |
-| Linting | ESLint (backend) + oxlint (frontend) |
-| Package manager | npm 11.19.0 |
-| Data format | JSON |
+| Frontend | React ^19.3.1 + TypeScript ~7.0.2 |
+| Build | Vite ^8.3.5, output to `public/` |
+| Styling | Tailwind CSS ^4.3.4, shadcn/ui pattern over Radix UI |
+| Icons | lucide-react |
+| Lint | ESLint (backend), oxlint (frontend) |
+| Tests | Node.js test runner, Playwright Test |
 
 ---
 
-## 5. Prerequisites
+## Requirements
 
-Required software:
-
-- Windows 10/11.
-- Node.js and npm.
-- Chromium browser installed through Playwright.
-- ServiceNow account with authorized access.
-- Network connectivity to the ServiceNow instance.
-
-### Verify installed tools
-
-Open PowerShell:
-
-```powershell
-node --version
-npm --version
-git --version
-```
-
-Check project dependencies:
-
-```powershell
-npm list --depth=0
-```
+- Windows 10 or 11. The launcher scripts, banner, and git hooks assume PowerShell.
+- Node.js 20 or newer and npm.
+- Chromium installed through Playwright.
+- A ServiceNow account with access to Change Task.
+- A license key from `zevn.web.id` (see [License Gate](#license-gate)).
 
 ---
 
-## 6. Installation
-
-### Step 1 — Clone repository
+## Installation
 
 ```powershell
 git clone <REPOSITORY_URL>
-```
-
-Navigate to project directory:
-
-```powershell
 cd ScrapeChangeTicket
-```
-
-For an existing local project:
-
-```powershell
-cd "C:\Users\admin\Documents\1. GITHUB\ScrapeChangeTicket"
-```
-
-### Step 2 — Install dependencies
-
-```powershell
 npm install
-```
-
-This installs dependencies defined in `package.json` and updates `node_modules`.
-
-### Step 3 — Install Playwright browser
-
-```powershell
 npx playwright install chromium
 ```
 
-### Step 4 — Verify installation
+`npm install` runs `postinstall`, which installs a `post-merge` git hook and prints the
+project banner. The hook prints the banner again on `git pull`.
+
+Build the dashboard once before starting the server for the first time:
 
 ```powershell
-node --version
-npm --version
-npx playwright --version
+cd frontend
+npm install
+npm run build
+cd ..
 ```
 
-### Step 5 — Inspect available npm scripts
-
-```powershell
-npm run
-```
-
-This displays scripts registered in `package.json`.
+`npm run build` in `frontend/` writes the SPA to `public/`, which the Express server serves.
 
 ---
 
-## 7. Environment Configuration
+## Configuration
 
-The application uses environment configuration for credentials and runtime settings.
+Configuration is read from `.env` in the project root by `src/config.js`. Copy the sample
+file if it exists, then fill it in. Never commit `.env`; it is already in `.gitignore`.
 
-### Create environment file
+### ServiceNow and server
 
-If `.env.example` exists:
+| Variable | Default | Purpose |
+|---|---|---|
+| `SN_BASE_URL` | `https://pelindo.service-now.com` | Instance base URL |
+| `SN_USERNAME` | empty | ServiceNow username |
+| `SN_PASSWORD` | empty | ServiceNow password |
+| `HEADLESS` | `false` | Run Chromium without a visible window |
+| `PORT` | `3000` | HTTP port |
+| `SN_MAX_RETRIES` | `2` | Retries per ticket operation |
+| `SN_PAGE_SIZE` | `100` | Rows per list page |
+| `SN_CHECKPOINT_EVERY` | `5` | Checkpoint interval |
+| `SN_CONCURRENCY` | `1` | Ticket processing concurrency |
+| `OUTPUT_DIR` | `output` | Generated reports, checkpoints, evidence |
+| `PELINDO_LOGO_PATH` | `assets/pelindo-logo.png` | Logo placed in the PDF header |
+| `NO_SERVER` | unset | Set to `true` to import the app without listening (tests) |
+| `NODE_ENV` | unset | Set to `test` to silence the banner |
 
-```powershell
-Copy-Item .env.example .env
-```
+### License
 
-Open the configuration:
+| Variable | Default | Purpose |
+|---|---|---|
+| `ZEVN_LICENSE_API_URL` | `https://zevn.web.id/api/license/verify` | Verification endpoint |
+| `ZEVN_LICENSE_FILE` | `.zevn-license.json` | Local license and device binding file |
 
-```powershell
-notepad .env
-```
+### AI provider
 
-Configure the variables according to the names consumed by the application source code.
+`AI_PROVIDER` selects the provider: `groq` (default), `gemini`, `ollama`, `deepseek`, or
+`openrouter`. An unknown name makes the AI endpoints return an error that lists the
+supported providers.
 
-Do not assume variable names. Inspect `src/server.js` and `src/servicenow.js` when setting up a new environment.
+| Provider | Key | Model override |
+|---|---|---|
+| `groq` | `GROQ_API_KEY` | `GROQ_MODEL` (default `qwen/qwen3.8-27b`) |
+| `gemini` | `GEMINI_API_KEY` | `GEMINI_MODEL`, `GEMINI_BASE_URL` |
+| `ollama` | none | `OLLAMA_MODEL`, `OLLAMA_BASE_URL` (default `http://localhost:11434`) |
+| `deepseek` | `DEEPSEEK_API_KEY` | `DEEPSEEK_MODEL` |
+| `openrouter` | `OPENROUTER_API_KEY` | `OPENROUTER_MODEL` |
 
-### Security requirements
-
-- Do not hardcode credentials.
-- Do not commit `.env`.
-- Do not expose session cookies or authentication tokens.
-- Keep `.env.example` free of real credentials.
-- Restrict access to generated operational reports.
-
-Verify `.gitignore`:
-
-```powershell
-Get-Content .gitignore
-```
-
-At minimum, sensitive local files should be excluded:
-
-```gitignore
-.env
-.env.*
-!.env.example
-node_modules/
-```
-
-Adjust exclusions to preserve any intentionally tracked configuration files.
+All providers are called through the OpenAI-compatible chat completions shape.
+AI calls use only ticket text from the current run; no credentials or session cookies are sent.
 
 ---
 
-## 8. Running the Application
+## Running
 
-### Start server
+Development (server with `--watch`, banner on start):
+
+```powershell
+npm run dev
+```
+
+Production-style start:
 
 ```powershell
 npm start
 ```
 
-Expected local URL:
-
-```text
-http://localhost:3000
-```
-
-Open the URL in a browser.
-
-### Check server availability
-
-In another PowerShell window:
+Frontend development with hot reload, proxying `/api` to the Node server:
 
 ```powershell
-Test-NetConnection localhost -Port 3000
+cd frontend
+npm run dev
 ```
 
-### Inspect port usage
+Open <http://localhost:3000> for the built app, or the Vite port for the dev frontend.
 
-```powershell
-netstat -ano | findstr :3000
-```
+### npm scripts
 
-### Stop the application
-
-Press:
-
-```text
-CTRL + C
-```
-
-### Restart
-
-```powershell
-npm start
-```
-
----
-
-## 9. Application Workflow
-
-### 9.1 Session Initialization
-
-1. Open the application.
-2. Start the ServiceNow browser session.
-3. Complete authentication if required.
-4. Wait for session detection.
-5. Confirm browser connection status.
-
-### 9.2 Filter Discovery
-
-The application reads filters from the ServiceNow list interface.
-
-Expected process:
-
-1. Navigate to Change Task.
-2. Identify the active list frame.
-3. Open List controls.
-4. Open Filters.
-5. Read available filter entries.
-6. Exclude non-filter actions and placeholders.
-7. Return valid filter names to the frontend.
-
-### 9.3 Estimate Records
-
-Select a filter and request an estimated record count.
-
-The estimate should be taken from the active ServiceNow list, not fabricated from local data.
-
-### 9.4 Execute Scraping
-
-Set the ticket limit:
-
-| Value | Behavior |
+| Script | Action |
 |---|---|
-| 0 | Process all available records |
-| Positive integer | Process up to the specified limit |
+| `npm start` | Run `src/server.js` |
+| `npm run dev` | Banner plus `node --watch src/server.js` |
+| `npm run banner` | Print the project banner |
+| `npm test` | Unit, integration, and visual tests |
+| `npm run test:unit` | Unit tests only |
+| `npm run test:integration` | Integration tests only |
+| `npm run test:visual` | Visual tests only |
+| `npm run test:e2e` | Playwright end-to-end tests |
+| `npm run lint` | ESLint over `src`, `tests`, `scripts` |
+| `npm run live:smoke` | Live smoke check against a real instance |
+| `npm run check:memory` | Verify `AGENTS.md` matches the files on disk |
 
-Start scraping and monitor progress.
-
-### 9.5 Validate Results
-
-Before exporting, verify:
-
-- Selected filter.
-- Total records found.
-- Number processed.
-- Successful records.
-- Failed records.
-- Duplicate handling.
-- Scraping completion status.
-
-### 9.6 Export
-
-The export engine uses the active scraping dataset.
-
-No manual ticket-by-ticket selection is required.
-
-Available output formats:
-
-- PDF
-- XLSX
-- JSON
+Frontend scripts live in `frontend/package.json`: `dev`, `build`, `lint` (oxlint), `preview`.
 
 ---
 
-## 10. Scraping Engine
+## Workflow
 
-### 10.1 Frame Selection
-
-ServiceNow may render list content inside an iframe.
-
-The automation must select the active frame containing the actual ticket list and pagination controls.
-
-The implementation uses the relevant frame, such as `gsft_main`, while validating that the frame contains the expected list elements.
-
-### 10.2 Table Extraction
-
-The extraction process should:
-
-1. Identify visible ticket tables.
-2. Select the table containing the relevant ticket links.
-3. Read actual record rows.
-4. Map column headers to values.
-5. Ignore interface-only and generated noise fields.
-
-### 10.3 Pagination
-
-Pagination must be processed sequentially.
-
-Recommended control flow:
-
-```mermaid
-flowchart TD
-    A[Read current page] --> B[Extract ticket records]
-    B --> C[Deduplicate records]
-    C --> D{Next page available?}
-    D -->|Yes| E[Find visible enabled Next]
-    E --> F[Click Next]
-    F --> G{Page changed?}
-    G -->|Yes| A
-    G -->|No| H[Stop safely]
-    D -->|No| I[Finish scraping]
-    H --> I
-```
-
-Pagination safeguards:
-
-- Select controls from the correct frame.
-- Prefer visible and enabled controls.
-- Ignore hidden duplicate controls.
-- Verify that the page actually changes.
-- Track page signatures.
-- Track processed ticket identifiers.
-- Enforce maximum page limits.
-- Stop if pagination becomes stuck.
-- Prevent infinite loops.
-- Do not silently skip pages.
-
-A pagination failure must be reported as an error rather than treated as successful completion.
-
-### 10.4 Duplicate Prevention
-
-Ticket identifiers are used to identify previously processed records.
-
-A ticket already present in the processed set must not be added again.
-
-### 10.5 Error Handling
-
-Errors should be recorded at the appropriate level:
-
-- Session initialization error.
-- Filter discovery error.
-- Table extraction error.
-- Pagination error.
-- Ticket detail error.
-- Activity extraction error.
-- Export generation error.
-
-A failure on an individual ticket should not silently corrupt the entire dataset.
+1. Start the server and open the dashboard.
+2. Start the browser session. Log in manually if the instance needs SSO or MFA.
+3. Refresh filters, then pick the filter to scrape.
+4. Read the estimate, then start scraping. Set a limit or leave it at 0 for all records.
+5. Watch progress in the live log and the ticket table. Pause, resume, or cancel if needed.
+6. Review tickets, run AI summary, risk, or duplicate checks where useful.
+7. Upload evidence for tickets that need screenshots.
+8. Export PDF, Excel, or JSON.
 
 ---
 
-## 11. Data Structure
+## Scraping Behavior
 
-The application stores scraping results as structured JSON.
+- The list lives in the ServiceNow iframe (`#gsft_main`); selectors are scoped to that frame.
+- Filters come from the list filter menu, with menu actions and placeholders removed.
+- Pagination reads the current page, extracts rows, then clicks the visible enabled Next control.
+  It stops when the page signature repeats, when there is no next control, or at the page cap.
+- A ticket that already exists in the run is updated, not appended.
+- A failed ticket is recorded with `scrape_status: "failed"` and its error, and the run continues.
+- `nipp_nrk` is filled from the ServiceNow `user_name`.
+- The report PIC is read from the ticket description (`PIC: NAME` or `PIC Request: NAME`),
+  falling back to the assigned user.
+- Checkpoints are written during the run, so an interrupted scrape keeps its progress.
 
-### Example metadata
+---
+
+## Data Shape
+
+A run is one JSON object, written to `output/<filter>-checkpoint.json` and exported as
+`output/<filter>-result.json`.
 
 ```json
 {
   "metadata": {
     "source": "ServiceNow",
-    "filter_name": "CTASK SEPTEMBER",
-    "scraped_at": "2026-11-01T00:00:00.000Z",
+    "filter_name": "CTASK OKTOBER",
+    "scraped_at": "2026-11-01T04:00:00.000Z",
     "total_found": 272,
     "processed": 10,
     "success": 10,
@@ -571,525 +301,209 @@ The application stores scraping results as structured JSON.
 }
 ```
 
-This is an illustrative structure. Actual metadata must reflect the real scraping execution.
-
-### Ticket data domains
-
-| Object | Description |
+| Field | Content |
 |---|---|
-| `metadata` | Scraping context and counters |
-| `tickets` | Collection of extracted tickets |
-| `data_tabel` | Original list-table information |
-| `detail_tiket` | Ticket detail fields |
-| `activities` | Activity history |
-| `scrape_status` | Per-ticket processing result |
-| `errors` | Extraction errors |
-| `report` | Reporting classification |
+| `data_tabel` | The row as read from the list table |
+| `detail_tiket` | Fields from the ticket form |
+| `activities` | Activity history entries |
+| `activities_status` | `ok` or `error` |
+| `scrape_status` | `success` or `failed` |
+| `errors` | Validation notes and extraction errors |
+| `validation_status` | `valid`, `warning`, or `invalid` |
 
-### Data normalization
-
-The parser should distinguish:
-
-- Display values.
-- Internal ServiceNow identifiers.
-- HTML content.
-- Plain text.
-- Empty values.
-- Missing values.
-
-Internal identifiers such as sys_id should not be presented as human-readable names when a display value is available.
+The parser keeps display values, so a reference field shows the label rather than the `sys_id`.
 
 ---
 
-## 12. Export Engine
+## Reporting
 
-### 12.1 PDF Generator
+**PDF** (`src/pdf.js`)
+- A4 portrait, header with logo, one table per ticket.
+- Long Cause and Action Plan content continues onto following pages with page numbers.
+- Evidence screenshots are embedded for tickets that have an uploaded image.
+- Result column can be overridden per export with `resultDefault`
+  (`Success`, `Warning`, `Error`, `Other`), applied to tickets without a stored result.
 
-Source module:
+**Excel** (`src/excel.js`)
+- One row per successful ticket, styled header, freeze panes, autofilter.
+- Metadata worksheet with filter name, period, and counters.
 
-```text
-src/pdf.js
-```
+**JSON**
+- `GET /api/export/json` returns the full run, unfiltered.
 
-Responsibilities:
-
-- Generate standardized PDF reports.
-- Render structured ticket information.
-- Preserve table borders and column widths.
-- Handle long descriptions.
-- Handle long Cause and Action Plan content.
-- Create continuation pages.
-- Maintain page numbering.
-
-### Long-content handling
-
-A ticket that exceeds one page should continue on subsequent pages.
-
-The generator must preserve:
-
-- Ticket identity.
-- Field ordering.
-- Table structure.
-- Text readability.
-- Continuation indicators.
-- Page numbering.
-
-The export must not silently truncate important information.
-
-### 12.2 Excel Generator
-
-Source module:
-
-```text
-src/excel.js
-```
-
-Responsibilities:
-
-- Generate XLSX workbooks.
-- Create structured data columns.
-- Format header rows.
-- Apply freeze panes.
-- Enable autofilter.
-- Create metadata worksheet.
-- Preserve display values.
-
-### 12.3 JSON Export
-
-JSON export should preserve the complete scraping dataset, including metadata and ticket processing status.
-
-### 12.4 Export validation
-
-Before accepting an export as valid:
-
-- Check the generated file exists.
-- Check file size is non-zero.
-- Check expected ticket identifiers are present.
-- Check PDF page dimensions.
-- Check long-content continuation.
-- Check Excel worksheet names.
-- Check row and column counts.
-- Check metadata consistency.
+Exports are blocked while a scrape is running and when there is no successful ticket, so the
+report never covers a partial dataset.
 
 ---
 
-## 13. API Reference
+## AI Features
 
-The application exposes HTTP endpoints through its Node.js server.
+All four features live in `src/ai/` and share `provider.js`.
 
-The following are the documented functional areas. Confirm exact HTTP methods, paths, and request schemas against the current route definitions in `src/server.js` before integrating external clients.
+| Module | Used by | Output |
+|---|---|---|
+| `summary.js` | `GET /api/tickets/:number/summary`, `GET /api/requests/:number/summary` | `summary`, `riskLevel`, `category` |
+| `risk.js` | `POST /api/ai/analyze-risk` | Risk level with mitigation suggestions |
+| `duplicate.js` | `POST /api/ai/detect-duplicates` | Matching tickets with similarity reason |
+| `analysis.js` | Combined multi-ticket pass | Cross-ticket findings |
 
-| API area | Function |
-|---|---|
-| Session | Open and inspect browser session |
-| Filters | Refresh and retrieve available filters |
-| Estimate | Estimate records for a selected filter |
-| Scraping | Start, pause, resume, or cancel processing |
-| Progress | Retrieve scraping state |
-| History | Retrieve previous scraping runs |
-| Tickets | Retrieve extracted ticket records |
-| PDF | Preview and generate PDF reports |
-| Excel | Generate XLSX reports |
-| JSON | Download complete scraping data |
+Summaries are cached in memory per ticket number and cleared on restart. If the provider
+fails or returns malformed JSON, the summary falls back to `riskLevel: "medium"` and
+`category: "Other"` instead of failing the request.
 
-### Local API inspection
-
-Check the server source:
-
-```powershell
-Get-Content .\src\server.js
-```
-
-Search route definitions:
-
-```powershell
-Select-String -Path .\src\server.js -Pattern "app.get|app.post|router.get|router.post"
-```
-
-Check the local server:
-
-```powershell
-Invoke-WebRequest http://localhost:3000
-```
-
-For JSON endpoints:
-
-```powershell
-Invoke-RestMethod http://localhost:3000/api/filters/refresh
-```
-
-Use the actual endpoint and HTTP method defined in the current application. Some endpoints may require an active session or request body.
+AI output is indicative. It is not a substitute for a change manager's review.
 
 ---
 
-## 14. Project Structure
+## License Gate
+
+`src/license.js` verifies the license against `ZEVN_LICENSE_API_URL` and binds it to the
+machine. The result is cached in `.zevn-license.json`.
+
+The following route prefixes require an active license:
+`/api/scrape`, `/api/ai`, `/api/session`, `/api/login`, `/api/filters`, `/api/estimate`,
+`/api/requests`, `/api/tickets`.
+
+`GET /api/license/status` reports the current state, `POST /api/license/activate` takes a
+key, and `POST /api/license/deactivate` clears the local binding.
+---
+
+## API Reference
+
+All routes are defined in `src/server.js`. JSON bodies are sent as `application/json`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/license/status` | License and device binding status |
+| POST | `/api/license/activate` | Activate a key |
+| POST | `/api/license/deactivate` | Clear the local activation |
+| GET | `/api/state` | Public app state: job, filters, estimate, counters |
+| POST | `/api/session/start` | Launch the Playwright session |
+| POST | `/api/login` | Log in; body `{ "manual": true }` for a visible manual login |
+| POST | `/api/filters/refresh` | Read filters from ServiceNow |
+| GET | `/api/filters` | Cached filter list and selected filter |
+| POST | `/api/filters/select` | Select a filter by name; body `{ "name": "..." }` |
+| GET | `/api/estimate` | Record estimate for the selected filter |
+| POST | `/api/scrape` | Start a run; returns `409` if one is already active |
+| POST | `/api/scrape/:action` | `pause`, `resume`, or `cancel` |
+| GET | `/api/results` | Current run object |
+| GET | `/api/export/json` | Download the run as JSON |
+| POST | `/api/upload-evidence` | Body `{ "dataUrl": "...", "ticketNumbers": [] }` |
+| POST | `/api/export/pdf` | Generate and download the PDF |
+| GET/POST | `/api/export/pdf-preview` | Same report, served inline |
+| GET | `/api/export/excel` | Download the XLSX |
+| GET | `/api/requests` | Change Request list from the live instance |
+| GET | `/api/requests/all` | Paged Change Request list |
+| GET | `/api/requests/:number/detail` | Detail plus activities for one request |
+| GET | `/api/requests/:number/summary` | AI summary for one request |
+| GET | `/api/tickets/:number/summary` | AI summary for a ticket in the current run |
+| POST | `/api/ai/analyze-risk` | Body `{ description, assignedTo, changeRequest, category }` |
+| POST | `/api/ai/detect-duplicates` | Body `{ targetTicket, historicalTickets? }` |
+| GET | `*` | SPA fallback to `public/index.html` |
+
+Quick check:
+
+```powershell
+Invoke-RestMethod http://localhost:3000/api/state
+```
+
+---
+
+## Project Structure
 
 ```text
 ScrapeChangeTicket/
-│
 ├── src/
-│   ├── server.js              # Express HTTP server
-│   ├── servicenow.js          # Playwright automation
-│   ├── parsers.js             # Data normalization
-│   ├── pdf.js                 # PDF generation
-│   ├── excel.js               # Excel generation
-│   └── ai/                    # [Future] AI service modules
-│
-├── frontend/                  # Vite + React app (new)
+│   ├── server.js          # Express routes and scrape job
+│   ├── config.js          # .env loading and defaults
+│   ├── servicenow.js      # Playwright client
+│   ├── parsers.js         # Normalization and validation
+│   ├── store.js           # Run, upsert, checkpoint
+│   ├── pdf.js             # PDF report
+│   ├── excel.js           # Excel report
+│   ├── license.js         # License verification
+│   ├── logger.js          # Leveled terminal logging
+│   ├── utils.js           # Dates, sanitizers, atomic writes
+│   └── ai/
+│       ├── provider.js    # OpenAI-compatible provider dispatch
+│       ├── summary.js
+│       ├── risk.js
+│       ├── analysis.js
+│       └── duplicate.js
+├── frontend/
 │   ├── src/
-│   │   ├── App.tsx            # Main router & state
-│   │   ├── main.tsx           # React entry
-│   │   ├── index.css          # Tailwind + theme
-│   │   ├── components/
-│   │   │   ├── ui/            # shadcn components
-│   │   │   ├── sidebar.tsx    # Navigation
-│   │   │   ├── topbar.tsx     # Header
-│   │   │   ├── status-badge.tsx
-│   │   │   └── metric-card.tsx
-│   │   ├── hooks/
-│   │   │   ├── use-app-state.ts
-│   │   │   ├── use-scrape-history.ts
-│   │   │   └── use-scraping-timer.ts
-│   │   ├── lib/
-│   │   │   ├── api.ts         # Type contracts
-│   │   │   ├── http.ts        # fetch wrapper
-│   │   │   ├── format.ts      # Format utils
-│   │   │   └── utils.ts       # cn()
-│   │   └── views/
-│   │       ├── dashboard-view.tsx
-│   │       ├── scrape-view.tsx
-│   │       ├── tickets-view.tsx
-│   │       ├── history-view.tsx
-│   │       ├── reports-view.tsx
-│   │       └── settings-view.tsx
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   ├── index.css
+│   │   ├── components/    # shadcn/ui components, sidebar, topbar, cards
+│   │   ├── hooks/         # app state, history, scraping timer
+│   │   ├── lib/           # api types, fetch wrapper, formatters
+│   │   └── views/         # dashboard, scrape, tickets, history, reports, settings
 │   ├── index.html
-│   ├── vite.config.ts         # Build → ../public
-│   ├── tailwind.config.ts
-│   ├── tsconfig.json
-│   └── package.json
-│
-├── public/                    # [Generated] Vite build output
-│   ├── index.html             # SPA entry
-│   ├── assets/                # index-<hash>.js|.css
-│   └── favicon.svg
-│
+│   └── vite.config.ts     # Build output to ../public
+├── public/                # Built SPA served by Express
+├── scripts/
+│   ├── banner.js
+│   ├── setup-hooks.js
+│   └── check-memory-sync.js
 ├── tests/
-│   ├── unit/
-│   ├── integration/
-│   ├── visual/
-│   └── e2e/                   # Playwright tests
-│       └── dashboard.spec.js
-│
-├── reference/
-├── output/
-│
-├── .env                       # [NOT committed]
-├── .env.example
-├── .gitignore
-├── package.json               # Backend + root scripts
-├── package-lock.json
-├── playwright.config.js       # E2E config
-├── AI-ROADMAP.md
-├── DESIGN.md
+│   └── unit/ integration/ visual/ e2e/ live/
+├── assets/                # Logo used in the PDF header
+├── output/                # Reports, checkpoints, evidence (gitignored)
+├── CHANGELOG.md
 └── README.md
 ```
 
-### Module responsibilities
-
-| File | Responsibility |
-|---|---|
-| `src/server.js` | HTTP server, routes, SPA fallback |
-| `src/servicenow.js` | ServiceNow browser automation |
-| `src/parsers.js` | Data parsing and normalization |
-| `src/pdf.js` | PDF generation |
-| `src/excel.js` | Excel generation |
-| `frontend/src/App.tsx` | View routing and state wiring |
-| `frontend/src/hooks/use-app-state.ts` | Global state polling `/api/state` |
-| `frontend/src/views/*.tsx` | View components (Dashboard, Scrape, etc.) |
-| `frontend/vite.config.ts` | Build config: output to `../public` |
-
 ---
 
-## 15. Testing
-
-### Run all Node tests
+## Testing
 
 ```powershell
-npm test
-```
-
-### Run lint
-
-```powershell
+npm test                  # unit + integration + visual
+npm run test:unit
+npm run test:integration
+npm run test:visual
+npm run test:e2e          # Playwright, browsers via npx playwright install
 npm run lint
 ```
 
-### Run Playwright E2E
-
-```powershell
-npm run test:e2e
-```
-
-If the project uses the Playwright CLI directly:
-
-```powershell
-npx playwright test
-```
-
-### Run E2E with visible browser
-
-```powershell
-npx playwright test --headed
-```
-
-### Run E2E in debug mode
-
-```powershell
-npx playwright test --debug
-```
-
-### Run a specific test file
-
-```powershell
-node --test tests/integration/filters-menu.test.js
-```
-
-```powershell
-node --test tests/integration/export.test.js
-```
-
-### Run unit and integration tests
-
-```powershell
-node --test tests/unit/*.test.js tests/integration/*.test.js
-```
-
-### Frontend lint
+Frontend lint:
 
 ```powershell
 cd frontend
 npm run lint
 ```
 
-### Test coverage areas
+`npm run live:smoke` talks to a real instance and needs a working `.env`.
 
-| Area | Validation |
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause |
 |---|---|
-| Filter discovery | Menu state and filter extraction |
-| Pagination | Page transitions and stopping conditions |
-| Deduplication | Duplicate ticket prevention |
-| Parsing | Field normalization |
-| PDF | Layout and continuation pages |
-| Excel | Worksheet and cell validation |
-| API | Response status and validation |
-| Frontend | Button state, view navigation, timer, history |
-| E2E | User workflow (credentials, navigation, exports) |
+| Login step never completes | SSO or MFA pending; use `POST /api/login` with `manual: true` |
+| Empty filter list | List controls not opened, or the filter menu markup changed |
+| Estimate shows 0 | Filter context mismatch; reselect the filter |
+| Pagination stops early | Next control hidden or disabled; check the page signature log |
+| `Tidak ada hasil` on export | No run yet, or no ticket finished with `success` |
+| `409` on export | A scrape is still running; wait or cancel it |
+| PDF missing logo | `PELINDO_LOGO_PATH` points at a missing file |
+| AI endpoints return a provider error | `AI_PROVIDER` name unknown or its API key missing |
+| License rejected | Device binding changed; deactivate then activate again |
 
-### Frontend-specific tests
-
-| Test | File | Coverage |
-|---|---|---|
-| Dashboard loads | `tests/e2e/dashboard.spec.js` | No credential leakage, heading visible |
-| View navigation | `tests/e2e/dashboard.spec.js` | Data tickets, Export reports, buttons |
-| Live timer | Manual / browser | MM:SS format during scraping |
-| Clear history | Manual / browser | AlertDialog → confirm → localStorage cleared |
+Run `npm start` in a visible terminal to read the structured log output while reproducing an
+issue. Avoid `force: true` in Playwright selectors as a first fix; check the frame and the
+actual DOM state instead.
 
 ---
 
-## 16. Debugging and Troubleshooting
+## Releases
 
-### Inspect server logs
-
-Run the server in a visible PowerShell terminal:
-
-```powershell
-npm start
-```
-
-Observe the log output during browser initialization and scraping.
-
-### Inspect port 3000
+Release history and version notes live in [CHANGELOG.md](CHANGELOG.md). Tags follow
+`vMAJOR.MINOR.PATCH`.
 
 ```powershell
-netstat -ano | findstr :3000
+git tag -l
+git tag -a v1.0.0 -m "v1.0.0"
 ```
-
-### Identify process
-
-```powershell
-Get-NetTCPConnection -LocalPort 3000 -State Listen
-```
-
-### Stop a process by PID
-
-Only after verifying the PID belongs to this application:
-
-```powershell
-Stop-Process -Id <PID> -Force
-```
-
-### Common problems
-
-| Problem | Possible cause |
-|---|---|
-| Login not detected | SSO or session not ready |
-| Filters unavailable | List controls or submenu not opened |
-| Zero tickets | Incorrect table or filter context |
-| Pagination timeout | Hidden or incorrect Next control |
-| Duplicate records | Incorrect record identity handling |
-| Empty activities | Activity selector or frame mismatch |
-| PDF generation error | Invalid or oversized report content |
-| Excel export failure | Invalid dataset or workbook generation |
-
-### Debugging principles
-
-1. Reproduce the error.
-2. Capture the exact error message.
-3. Identify the responsible module.
-4. Inspect the active browser frame.
-5. Validate selectors against the live DOM.
-6. Add a focused regression test.
-7. Re-run relevant tests.
-8. Verify the real application workflow when possible.
-
-Do not use `force: true` as the default solution for Playwright interaction problems.
-
----
-
-## 17. Security
-
-The application may handle internal operational data and authenticated browser sessions.
-
-Security requirements:
-
-- Keep credentials outside source code.
-- Exclude `.env` from version control.
-- Do not expose session cookies.
-- Restrict generated report access.
-- Avoid committing real scraping datasets.
-- Avoid publishing screenshots containing confidential information.
-- Validate user input on server endpoints.
-- Apply access controls appropriate to the deployment environment.
-
----
-
-## 18. Developer Workflow
-
-### Inspect repository state
-
-```powershell
-git status
-```
-
-### Review modified files
-
-```powershell
-git diff
-```
-
-### Check npm scripts
-
-```powershell
-npm run
-```
-
-### Run quality checks
-
-```powershell
-npm test
-npm run lint
-npm run test:e2e
-```
-
-### Stage changes
-
-```powershell
-git add src public tests README.md
-```
-
-### Commit changes
-
-```powershell
-git commit -m "feat: improve scraping and reporting"
-```
-
-### Review commit history
-
-```powershell
-git log --oneline -10
-```
-
-### Push changes
-
-```powershell
-git push
-```
-
-Before committing, inspect staged changes and ensure `.env`, private data, generated reports, and local browser artifacts are excluded.
-
----
-
-## 19. Operational Checklist
-
-### Before scraping
-
-- [ ] Application server is running.
-- [ ] ServiceNow session is authenticated.
-- [ ] Filter list has been refreshed.
-- [ ] Correct filter is selected.
-- [ ] Estimated record count is available.
-- [ ] Ticket limit is configured.
-
-### After scraping
-
-- [ ] Scraping process has completed.
-- [ ] Processed count is checked.
-- [ ] Failed records are reviewed.
-- [ ] Duplicate records are checked.
-- [ ] Ticket details are reviewed.
-- [ ] Activities are checked where applicable.
-
-### Before exporting
-
-- [ ] Correct scraping dataset is active.
-- [ ] Ticket count is verified.
-- [ ] PDF preview is checked.
-- [ ] Long-content pages are checked.
-- [ ] Excel data and metadata are checked.
-- [ ] Exported files are stored securely.
-
----
-
-## 20. Future Development
-
-Potential improvements:
-
-- More robust session recovery.
-- Configurable scraping concurrency.
-- Improved retry strategy.
-- Detailed extraction diagnostics.
-- Export audit logs.
-- Advanced ticket search.
-- Additional report formats.
-- Automated regression tests.
-- Deployment configuration.
-- Performance monitoring.
-
----
-
-## Project Information
-
-| Property | Value |
-|---|---|
-| Project | ScrapeChangeTicket |
-| Category | Automation & Reporting |
-| Runtime | Node.js |
-| Automation | Playwright |
-| Frontend | Vanilla JavaScript |
-| Export formats | PDF, XLSX, JSON |
-| Deployment | Local application |
-
-<p align="center">
-  <strong>ScrapeChangeTicket</strong><br/>
-  <sub>Automated ServiceNow Ticket Extraction & Reporting</sub>
-</p>
